@@ -35,7 +35,7 @@ def find_orbit(start_graph, n, d):
                 if encoded_complemented not in visited:
                     visited.append(encoded_complemented)
                     queue.append(encoded_complemented)
-    print(len(visited))
+    #print(len(visited))
     return visited  # Return all visited graphs as the result
 
 
@@ -133,16 +133,17 @@ def check_orbit_completeness(orbits, n, d):
 
     return incomplete_orbits
 
-n=4
-d=3
+n=7
+d=2
 
 #res=full_classification(n,d)
+#print(len(res))
 #for graphs in res:
     #draw_graph(graphs[0],n,d)
-#res=full_classification_loaded(n,d,"n_6,d_3")
-#save_orbits_to_file(res,filename="n_6,d_3_orbits")
+#res=full_classification_loaded(n,d,"n6d3")
+#save_orbits_to_file(res,filename="n6d2_orbits")
 #save_representatives_to_file(res,filename="n_6,d_3_rep")
 #res=load_orbits_from_file("n_4,d_3_orbits")
 #print(check_orbit_completeness(res,n,d))
-print(bitpack_decode(2725,n,d))
-print(bitpack_decode(1445,n,d))
+#print(bitpack_decode(2725,n,d))
+#print(bitpack_decode(1445,n,d))
