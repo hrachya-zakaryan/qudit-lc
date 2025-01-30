@@ -25,7 +25,7 @@ def generate_weighted(adj_matrix,d):
 
     # Generate all possible weight combinations (1 or 2) for these positions
     num_edges = len(upper_indices)
-    weight_combinations = product([1, 2], repeat=num_edges)
+    weight_combinations = product(range(1,d), repeat=num_edges)
 
     weighted_matrices = []
     for weights in weight_combinations:
@@ -114,19 +114,28 @@ def find_orbit(start_graph, n, d):
 
 def orbit_search(filename,n,d):
     # Read the graph6 file
-    graphs=generate_graphs(filename,n,d)
+    if d==2:
+        with open(filename, "r") as file:
+            graph6_lines = [line.strip() for line in file if line.strip()]
+
+        graphs = set([bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines])
+    else:
+        graphs=set(generate_graphs(filename,n,d))
     orbits=[]
-    while len(graphs)>0:
-        orbits.append(graphs[0])
-        temp_orbit=find_orbit(graphs[0],n,d)
-        graphs=[x for x in graphs if x not in temp_orbit]
+    while graphs:
+        current_graph = graphs.pop()
+        orbits.append(current_graph)
+        temp_orbit=find_orbit(current_graph,n,d)
+        print(f"{current_graph}:{len(temp_orbit)}")
+        temp_orbit_permuted = set()
+        for g in temp_orbit:
+            temp_orbit_permuted.update(generate_permuted(bitpack_decode(g, n, d), d))
+        graphs.difference_update(temp_orbit_permuted)
     return orbits
 
 # Convert each line from graph6 to a NetworkX graph
-n=5
+n=7
 d=3
-o=orbit_search("d3n5.txt",n,d)
+o=orbit_search("d3n7.txt",n,d)
 
-
-for x in o:
-    draw_graph(x,n,d)
+print(len(o))
