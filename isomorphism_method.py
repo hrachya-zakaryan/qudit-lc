@@ -4,6 +4,45 @@ from auxilary_unparallelized import local_complementation, local_scaling, bitpac
 from itertools import permutations
 import numpy as np
 from itertools import product
+import time
+from networkx.algorithms.isomorphism import GraphMatcher
+
+
+
+def generate_non_isomorphic_graphs(base_graph):
+    edges = list(base_graph.edges)
+    unique_graphs = set()
+    unique_graphs_bitpacked = []
+    for i in range(2 ** len(edges)):
+        # Generate a weight combination
+        weight_config = [(edges[j], 1 + ((i >> j) & 1)) for j in range(len(edges))]
+
+        # Create a new graph with this weight configuration
+        G = nx.Graph(base_graph)
+        for edge, weight in weight_config:
+            G[edge[0]][edge[1]]['weight'] = weight
+
+        # Get the canonical form using isomorphism check
+        can_form = nx.convert_node_labels_to_integers(G)
+        if not any(GraphMatcher(G, other,edge_match=lambda x,y: x['weight']==y['weight']).is_isomorphic() for other in unique_graphs):
+            unique_graphs.add(G)
+            unique_graphs_bitpacked.append(bitpack_encode(nx.to_numpy_array(G,dtype=int),d))
+    return unique_graphs_bitpacked
+
+
+def create_graphs(filename, n, d):
+    
+    with open(filename, "r") as file:
+        graph6_lines = [line.strip() for line in file if line.strip()]
+
+    iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
+
+    weighted_iso_graphs=[]
+    for ig in iso_graphs:
+        weighted_iso_graphs.extend(generate_non_isomorphic_graphs(nx.from_numpy_array(bitpack_decode(ig,n,d))))
+    return weighted_iso_graphs
+
+
 
 def generate_permuted(adj_matrix,d):
     """Generate all possible vertex permutations of an adjacency matrix."""
@@ -83,12 +122,13 @@ def find_orbit(start_graph, n, d):
     # Define all possible scaling and complementation factors
     scaling_factors = range(2, d)  # Local scaling factors (mod d)
     complementing_factors = range(1, d)
-
+    min_graph=visited[0]
 
     while queue:
         current = queue.popleft()
         current_matrix = bitpack_decode(current, n, d)
-        
+        if current.bit_count()<=min_graph.bit_count() and current<min_graph:
+            min_graph=current
       
         for v in range(n):
             # Local scaling
@@ -109,11 +149,12 @@ def find_orbit(start_graph, n, d):
                     visited.append(encoded_complemented)
                     queue.append(encoded_complemented)
     #print(len(visited))
-    return visited
+    return visited, min_graph
 
 
 def orbit_search(filename,n,d):
     # Read the graph6 file
+    ts=time.time()
     if d==2:
         with open(filename, "r") as file:
             graph6_lines = [line.strip() for line in file if line.strip()]
@@ -122,20 +163,43 @@ def orbit_search(filename,n,d):
     else:
         graphs=set(generate_graphs(filename,n,d))
     orbits=[]
+    full_orbits_filtered=[]
     while graphs:
         current_graph = graphs.pop()
+        print(f"Before orbit: {time.time()-ts}")
+        temp_orbit, current_graph = find_orbit(current_graph,n,d)
         orbits.append(current_graph)
-        temp_orbit=find_orbit(current_graph,n,d)
         print(f"{current_graph}:{len(temp_orbit)}")
-        temp_orbit_permuted = set()
+        print(f"After orbit: {time.time()-ts}")
         for g in temp_orbit:
-            temp_orbit_permuted.update(generate_permuted(bitpack_decode(g, n, d), d))
-        graphs.difference_update(temp_orbit_permuted)
-    return orbits
+           graphs.difference_update(generate_permuted(bitpack_decode(g, n, d), d))
+        temp_orbit=set(temp_orbit)
+        temp_orbit_filtered=set()
+        while temp_orbit:
+            g = temp_orbit.pop()
+            temp_orbit_filtered.add(g)
+            temp_orbit.difference_update(generate_permuted(bitpack_decode(g,n,d),d))
+        full_orbits_filtered.append(temp_orbit_filtered)
+
+    print(f"End: {time.time()-ts}")
+    return orbits, full_orbits_filtered
 
 # Convert each line from graph6 to a NetworkX graph
-n=7
+n=6
 d=3
-o=orbit_search("d3n7.txt",n,d)
+#o,f_o=orbit_search("d3n4.txt",n,d)
 
-print(len(o))
+ts=time.time()
+print(time.time()-ts)
+gg=generate_graphs("d3n6.txt",n,d)
+print(len(gg))
+print(time.time()-ts)
+ts=time.time()
+print(time.time()-ts)
+cg=create_graphs("d3n6.txt",n,d)
+print(len(cg))
+print(time.time()-ts)
+
+#for i in range(len(cg)):
+#    draw_graph(gg[i],n,d)
+#    draw_graph(cg[i],n,d)
