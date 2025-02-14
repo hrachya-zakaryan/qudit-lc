@@ -6,8 +6,9 @@ import numpy as np
 from itertools import product
 import time
 from networkx.algorithms.isomorphism import GraphMatcher
-
-
+import asyncio
+import concurrent.futures
+import multiprocessing
 
 def generate_non_isomorphic_graphs(base_graph):
     edges = list(base_graph.edges)
@@ -59,12 +60,6 @@ def generate_permuted(adj_matrix,d):
         
         relabeled_graphs.append(g)
 
-    #permuted_matrices = set()
-    
-    # for perm in permutations(range(n)):
-    #     permuted_matrix = adj_matrix[np.ix_(perm, perm)]
-    #     permuted_matrices.add(bitpack_encode(permuted_matrix,d))
-        
     return relabeled_graphs
 
 
@@ -93,30 +88,78 @@ def generate_weighted(adj_matrix,d):
 
     return weighted_matrices
 
+executor = concurrent.futures.ProcessPoolExecutor()  # Use processes instead of threads
 
-def generate_graphs(filename, n, d):
+# Wrap CPU-bound functions to run in threads
+async def async_generate_weighted(adj_matrix, d):
+    """Run generate_weighted in a thread."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, generate_weighted, adj_matrix, d)
+
+async def async_generate_permuted(adj_matrix, d):
+    """Run generate_permuted in a thread."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, generate_permuted, adj_matrix, d)
+
+# def generate_graphs(filename, n, d):
+    
+#     with open(filename, "r") as file:
+#         graph6_lines = [line.strip() for line in file if line.strip()]
+
+#     iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
+#     ts=time.time()
+    
+#     #draw_graphs(iso_graphs,n,d)
+#     weighted_iso_graphs=[]
+#     i=1
+#     for ig in iso_graphs:
+#         temp_ts=time.time()
+#         weighted_iso_graphs.append(ig) 
+#         weighted_graphs = set(generate_weighted(bitpack_decode(ig,n,d),d))
+    
+#         while len(weighted_graphs)>0:
+#             g=weighted_graphs.pop()
+#             weighted_iso_graphs.append(g)
+#             perms=generate_permuted(bitpack_decode(g,n,d),d)
+#             weighted_graphs.difference_update(perms)
+
+#         print(f"{i}: {time.time()-temp_ts}")
+#         i+=1
+   
+#     #print(f"end: {time.time()-ts}")
+#     return weighted_iso_graphs
+
+async def process_graph(ig,n,d):
+        #temp_ts=time.time()
+        results=[]
+        results.append(ig) 
+        weighted_graphs = set(await async_generate_weighted(bitpack_decode(ig,n,d),d))
+    
+        while weighted_graphs:
+            g=weighted_graphs.pop()
+            results.append(g)
+            perms=await async_generate_permuted(bitpack_decode(g,n,d),d)
+            weighted_graphs.difference_update(perms)
+        return results
+
+async def generate_graphs(filename, n, d):
     
     with open(filename, "r") as file:
         graph6_lines = [line.strip() for line in file if line.strip()]
 
     iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
-
+    ts=time.time()
+    
     #draw_graphs(iso_graphs,n,d)
     weighted_iso_graphs=[]
-    for ig in iso_graphs:
-        weighted_iso_graphs.append(ig) 
-        weighted_graphs = set(generate_weighted(bitpack_decode(ig,n,d),d))
-    
-        while len(weighted_graphs)>0:
-            g=weighted_graphs.pop()
-            weighted_iso_graphs.append(g)
-            perms=generate_permuted(bitpack_decode(g,n,d),d)
-            weighted_graphs.difference_update(perms)
-    #weighted_iso_graphs = [int(g) for g in weighted_iso_graphs]
-    #sorted_weighted_iso_graphs=sorted(weighted_iso_graphs,key=lambda g: (g.bit_count(),total_weight(g)))
-    #draw_graphs(sorted_weighted_iso_graphs,n,d,cols=5)
+    #i=1
+  
+        #print(f"{i}: {time.time()-temp_ts}")
+        #i+=1
+    all_results = await asyncio.gather(*[process_graph(ig,n,d) for ig in iso_graphs])
+    weighted_iso_graphs = [g for sublist in all_results for g in sublist]
+    print(f"end: {time.time()-ts}")
     return weighted_iso_graphs
-
 
 def total_weight(graph):
     bit_length=int(graph).bit_length()
@@ -256,7 +299,7 @@ def orbit_search(filename,n,d):
     print(f"End: {time.time()-ts}")
     return orbits, full_orbits_filtered
 
-def orbit_search_isomorphic(filename,n,d):
+async def orbit_search_isomorphic(filename,n,d):
     # Read the graph6 file
     ts=time.time()
     if d==2:
@@ -265,7 +308,7 @@ def orbit_search_isomorphic(filename,n,d):
 
         graphs = set([bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines])
     else:
-        graphs=set(generate_graphs(filename,n,d))
+        graphs=set(await generate_graphs(filename,n,d))
     orbits=[]
     while graphs:
         current_graph = graphs.pop()
@@ -280,14 +323,16 @@ def orbit_search_isomorphic(filename,n,d):
 
 
 # Convert each line from graph6 to a NetworkX graph
-n=6
+n=7
 d=3
 # o,f_o=orbit_search(f"d3n{n}.txt",n,d)
 # print(len(o))
 # print("---------------------")
-o=(orbit_search_isomorphic(f"d3n{n}.txt",n,d))
+#o=(orbit_search_isomorphic(f"d3n{n}.txt",n,d))
 # print(len(o))
-
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    print(len(asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))))
 # draw_graphs(o,n,d, cols=6)
 #print(len(generate_graphs(f"d3n{n}.txt",n,d)))
 """
