@@ -4,6 +4,51 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 
+import networkx as nx
+import matplotlib.pyplot as plt
+
+def draw_graphs(encoded_graphs, n, d, cols=3):
+    """
+    Draws multiple graphs given their bit encoding.
+
+    Parameters:
+        encoded_graphs (list of int): A list of bit-encoded graphs.
+        n (int): Number of vertices in the graphs.
+        d (int): Modulo value for weights (used for decoding).
+        cols (int): Number of columns in the subplot grid (default: 3).
+    """
+    num_graphs = len(encoded_graphs)
+    rows = (num_graphs + cols - 1) // cols  # Compute number of rows needed
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4))  # Create subplots
+    axes = axes.flatten() if num_graphs > 1 else [axes]  # Flatten axes for easy iteration
+
+    for i, encoded_graph in enumerate(encoded_graphs):
+        ax = axes[i]
+        adjacency_matrix = bitpack_decode(encoded_graph, n, d)
+        
+        G = nx.Graph()
+        for v in range(n):
+            G.add_node(v, label=f'Node {v}')
+            for u in range(v + 1, n):
+                if adjacency_matrix[v, u] > 0:
+                    G.add_edge(v, u, weight=adjacency_matrix[v, u])
+
+        pos = nx.spring_layout(G)  
+        edge_labels = {(u, v): f"{w}" for u, v, w in G.edges.data("weight")}
+        
+        nx.draw(G, pos, ax=ax, with_labels=True, node_color="lightblue", node_size=500, font_weight="bold")
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax)
+        
+        ax.set_title(f"Graph {i+1}")
+        ax.axis("off")  # Hide axis
+
+    # Hide any unused subplot axes
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.show()
 
 
 
