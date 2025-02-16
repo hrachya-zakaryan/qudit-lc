@@ -9,6 +9,7 @@ from networkx.algorithms.isomorphism import GraphMatcher
 import asyncio
 import concurrent.futures
 import multiprocessing
+import os
 
 def generate_non_isomorphic_graphs(base_graph):
     edges = list(base_graph.edges)
@@ -129,8 +130,8 @@ async def async_generate_permuted(adj_matrix, d):
 #     #print(f"end: {time.time()-ts}")
 #     return weighted_iso_graphs
 
-async def process_graph(ig,n,d):
-        #temp_ts=time.time()
+async def process_graph(ig,n,d,output_dir, index):
+        temp_ts=time.time()
         results=[]
         results.append(ig) 
         weighted_graphs = set(await async_generate_weighted(bitpack_decode(ig,n,d),d))
@@ -140,7 +141,15 @@ async def process_graph(ig,n,d):
             results.append(g)
             perms=await async_generate_permuted(bitpack_decode(g,n,d),d)
             weighted_graphs.difference_update(perms)
-        return results
+         # Ensure the output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Write to a file named by index
+        output_file = os.path.join(output_dir, f"{index}.txt")
+        with open(output_file, "w") as f:
+            for graph in results:
+                f.write(str(graph) + "\n")  # Write each graph on a new line
+        print(f"{index} end:{time.time()-temp_ts}")
 
 async def generate_graphs(filename, n, d):
     
@@ -149,17 +158,16 @@ async def generate_graphs(filename, n, d):
 
     iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
     ts=time.time()
-    
+
+    output_dir = os.path.join(os.getcwd(), str(n))
+    os.makedirs(output_dir, exist_ok=True)
     #draw_graphs(iso_graphs,n,d)
-    weighted_iso_graphs=[]
     #i=1
-  
+    
         #print(f"{i}: {time.time()-temp_ts}")
         #i+=1
-    all_results = await asyncio.gather(*[process_graph(ig,n,d) for ig in iso_graphs])
-    weighted_iso_graphs = [g for sublist in all_results for g in sublist]
+    await asyncio.gather(*[process_graph(ig,n,d,output_dir,i) for i,ig in enumerate(iso_graphs)])
     print(f"end: {time.time()-ts}")
-    return weighted_iso_graphs
 
 def total_weight(graph):
     bit_length=int(graph).bit_length()
@@ -321,6 +329,36 @@ async def orbit_search_isomorphic(filename,n,d):
     print(f"End: {time.time()-ts}")
     return orbits
 
+def orbit_search_isomorphic_from_file(n,d):
+    # Read the graph6 file
+    ts=time.time()
+    graphs = set()
+
+    # List all files in the directory
+    directory=os.path.join(os.getcwd(), str(n))
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+
+        # Ensure we only read files (skip directories)
+        if os.path.isfile(file_path):
+            with open(file_path, "r") as file:
+                for line in file:
+                    graph = int(line.strip())  # Convert graph from string to integer
+                    graphs.add(graph)
+    print(len(graphs))
+    print(f"Start:{time.time()-ts}")
+    orbits=[]
+    while graphs:
+        current_graph = graphs.pop()
+        print(f"Before orbit: {time.time()-ts}")
+        temp_orbit, current_graph = find_orbit_isomorphic(graphs,current_graph,n,d)
+        orbits.append(current_graph)
+        print(f"{current_graph}:{len(temp_orbit)}")
+        print(f"After orbit: {time.time()-ts}")        
+
+    print(f"End: {time.time()-ts}")
+    return orbits
+
 
 # Convert each line from graph6 to a NetworkX graph
 n=7
@@ -330,11 +368,13 @@ d=3
 # print("---------------------")
 #o=(orbit_search_isomorphic(f"d3n{n}.txt",n,d))
 # print(len(o))
-if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    print(len(asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))))
+#if __name__ == "__main__":
+#    multiprocessing.freeze_support()
+#    asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
 # draw_graphs(o,n,d, cols=6)
 #print(len(generate_graphs(f"d3n{n}.txt",n,d)))
+
+orbit_search_isomorphic_from_file(n,d)
 """
 ts=time.time()
 print(time.time()-ts)
