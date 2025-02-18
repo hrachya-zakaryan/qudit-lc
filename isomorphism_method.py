@@ -275,18 +275,82 @@ def find_orbit_isomorphic(graphs,start_graph, n, d):
     return visited, min_graph
 
 
-def orbit_search(filename,n,d):
+def find_orbit_isomorphic_no_global_filter(start_graph, n, d):
+    queue = deque([start_graph])  # BFS queue
+    visited = set()  # Set of visited graphs
+    visited.add(start_graph)
+    
+    # Define all possible scaling and complementation factors
+    scaling_factors = range(2, d)  # Local scaling factors (mod d)
+    complementing_factors = range(1, d)
+    min_graph=start_graph
+    ts=time.time()
+    while queue:
+        print(len(queue))
+        print(f"{time.time()-ts}")
+        current_level = list(queue)
+        queue.clear()
+        temp_level=set()
+        for current in current_level:
+            #print("current")
+            #draw_graph(current,n,d)
+            
+            current_matrix = bitpack_decode(current, n, d)
+            if current.bit_count()<=min_graph.bit_count():
+                if total_weight(current)<=total_weight(min_graph):
+                    if current<min_graph:
+                        min_graph=current
+            
+            for v in range(n):
+                # Local scaling
+                for k in scaling_factors:
+                    scaled_matrix = current_matrix.copy()
+                    local_scaling(scaled_matrix, v, k, d)
+                    encoded_scaled = bitpack_encode(scaled_matrix, d)
+                    if encoded_scaled not in visited:
+                        temp_level.add(encoded_scaled)
+                
+                # Local complementation
+                for k in complementing_factors:
+                    complemented_matrix = current_matrix.copy()
+                    local_complementation(complemented_matrix, v, k, d)
+                    encoded_complemented = bitpack_encode(complemented_matrix, d)
+                    if encoded_complemented not in visited:
+                        temp_level.add(encoded_complemented)
+        while temp_level:
+            g=temp_level.pop()
+            #print(nx.from_numpy_array(bitpack_decode(g,n,d)).edges.data())
+            #print("g")
+            #draw_graph(g,n,d)
+            #perms=set(generate_permuted(bitpack_decode(g,n,d),d))
+            #inter_visited=bool(perms.intersection(visited))
+            if g not in temp_level:
+                visited.add(g)
+                queue.append(g)
+            #temp_level.difference_update(perms)
+                    
+    return visited, min_graph
+
+
+
+def orbit_search(n,d):
     # Read the graph6 file
     ts=time.time()
-    if d==2:
-        with open(filename, "r") as file:
-            graph6_lines = [line.strip() for line in file if line.strip()]
+    graphs = set()
 
-        graphs = set([bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines])
-    else:
-        graphs=set(generate_graphs(filename,n,d))
+    # List all files in the directory
+    directory=os.path.join(os.getcwd(), str(n))
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+
+        # Ensure we only read files (skip directories)
+        if os.path.isfile(file_path):
+            with open(file_path, "r") as file:
+                for line in file:
+                    graph = int(line.strip())  # Convert graph from string to integer
+                    graphs.add(graph)
+    orbits_reps=[]
     orbits=[]
-    full_orbits_filtered=[]
     while graphs:
         current_graph = graphs.pop()
         print(f"Before orbit: {time.time()-ts}")
@@ -297,15 +361,13 @@ def orbit_search(filename,n,d):
         for g in temp_orbit:
            graphs.difference_update(generate_permuted(bitpack_decode(g, n, d), d))
         temp_orbit=set(temp_orbit)
-        temp_orbit_filtered=set()
-        while temp_orbit:
-            g = temp_orbit.pop()
-            temp_orbit_filtered.add(g)
-            temp_orbit.difference_update(generate_permuted(bitpack_decode(g,n,d),d))
-        full_orbits_filtered.append(temp_orbit_filtered)
+        orbits_reps.append(current_graph)
+        orbits.append(temp_orbit)
+        
+        
 
     print(f"End: {time.time()-ts}")
-    return orbits, full_orbits_filtered
+    return orbits, orbits_reps
 
 async def orbit_search_isomorphic(filename,n,d):
     # Read the graph6 file
@@ -374,7 +436,10 @@ d=3
 # draw_graphs(o,n,d, cols=6)
 #print(len(generate_graphs(f"d3n{n}.txt",n,d)))
 
-orbit_search_isomorphic_from_file(n,d)
+#orbit_search_isomorphic_from_file(n,d)
+#v,m=find_orbit_isomorphic_no_global_filter(2227370722648,n,d)
+#print(len(v))
+#draw_graph(m,n,d)
 """
 ts=time.time()
 print(time.time()-ts)
