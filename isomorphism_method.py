@@ -138,8 +138,9 @@ async def process_graph(ig,n,d,output_dir, index):
     
         while weighted_graphs:
             g=weighted_graphs.pop()
-            results.append(g)
+            
             perms=await async_generate_permuted(bitpack_decode(g,n,d),d)
+            results.append(min(perms))
             weighted_graphs.difference_update(perms)
          # Ensure the output directory exists
         os.makedirs(output_dir, exist_ok=True)
@@ -423,16 +424,16 @@ def orbit_search_isomorphic_from_file(n,d):
 
 
 # Convert each line from graph6 to a NetworkX graph
-n=7
+n=6
 d=3
 # o,f_o=orbit_search(f"d3n{n}.txt",n,d)
 # print(len(o))
 # print("---------------------")
 #o=(orbit_search_isomorphic(f"d3n{n}.txt",n,d))
 # print(len(o))
-#if __name__ == "__main__":
-#    multiprocessing.freeze_support()
-#    asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
 # draw_graphs(o,n,d, cols=6)
 #print(len(generate_graphs(f"d3n{n}.txt",n,d)))
 
