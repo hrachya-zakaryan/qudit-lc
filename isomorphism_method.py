@@ -424,7 +424,7 @@ def orbit_search_isomorphic_from_file(n,d):
 
 
 # Convert each line from graph6 to a NetworkX graph
-n=6
+n=7
 d=3
 # o,f_o=orbit_search(f"d3n{n}.txt",n,d)
 # print(len(o))
