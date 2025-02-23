@@ -132,20 +132,20 @@ def plot_graph(G, n, d):
     # Add a title
     plt.title(f"Graph with {len(G.nodes)} Nodes and {len(G.edges)} Edges", fontsize=14)
     plt.show()
-n=6
-d=3
+# n=6
+# d=3
 
-orbits=orbit_search_isomorphic_from_file(n,d)[0]
+# orbits=orbit_search_isomorphic_from_file(n,d)[0]
 
-for orbit in orbits:
-    ts=time.time()
-    G=nx.Graph()
-    for g in orbit:
-        G.add_node(g)
-    for g in orbit:
-        create_orbital_graph(g,n,d,G)
-    print(f"{time.time()-ts}")
-    plot_graph(G,n,d)
+# for orbit in orbits:
+#     ts=time.time()
+#     G=nx.Graph()
+#     for g in orbit:
+#         G.add_node(g)
+#     for g in orbit:
+#         create_orbital_graph(g,n,d,G)
+#     print(f"{time.time()-ts}")
+#     plot_graph(G,n,d)
     
 #print(G.edges)
 #draw_graphs([41,42],n,d)

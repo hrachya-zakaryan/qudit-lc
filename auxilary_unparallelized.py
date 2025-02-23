@@ -100,7 +100,7 @@ def bitpack_encode(matrix, d):
             packed |= (weight << shift)  # Shift and add weight to packed
             shift += bit_length  # Update shift for the next weight
     
-    return packed
+    return int(packed)
 
 def bitpack_decode(packed, n, d):
     bit_length = d.bit_length()
