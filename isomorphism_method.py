@@ -10,40 +10,7 @@ import asyncio
 import concurrent.futures
 import multiprocessing
 import os
-
-def generate_non_isomorphic_graphs(base_graph):
-    edges = list(base_graph.edges)
-    unique_graphs = set()
-    unique_graphs_bitpacked = []
-    for i in range(2 ** len(edges)):
-        # Generate a weight combination
-        weight_config = [(edges[j], 1 + ((i >> j) & 1)) for j in range(len(edges))]
-
-        # Create a new graph with this weight configuration
-        G = nx.Graph(base_graph)
-        for edge, weight in weight_config:
-            G[edge[0]][edge[1]]['weight'] = weight
-
-        # Get the canonical form using isomorphism check
-        can_form = nx.convert_node_labels_to_integers(G)
-        if not any(GraphMatcher(G, other,edge_match=lambda x,y: x['weight']==y['weight']).is_isomorphic() for other in unique_graphs):
-            unique_graphs.add(G)
-            unique_graphs_bitpacked.append(bitpack_encode(nx.to_numpy_array(G,dtype=int),d))
-    return unique_graphs_bitpacked
-
-
-def create_graphs(filename, n, d):
-    
-    with open(filename, "r") as file:
-        graph6_lines = [line.strip() for line in file if line.strip()]
-
-    iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
-
-    weighted_iso_graphs=[]
-    for ig in iso_graphs:
-        weighted_iso_graphs.extend(generate_non_isomorphic_graphs(nx.from_numpy_array(bitpack_decode(ig,n,d))))
-    return weighted_iso_graphs
-
+from matplotlib import pyplot as plt
 
 
 def generate_permuted(adj_matrix,d):
@@ -52,14 +19,14 @@ def generate_permuted(adj_matrix,d):
     node_permutations = list(permutations(G.nodes()))
     
     # Generate relabeled graphs
-    relabeled_graphs = []
+    relabeled_graphs = set()
     for perm in node_permutations:
         mapping = {old: new for old, new in zip(G.nodes(), perm)}
         new_G = nx.relabel_nodes(G, mapping)
         sorted_nodes = sorted(new_G.nodes())
         g=bitpack_encode(nx.to_numpy_array(new_G,dtype=int,nodelist=sorted_nodes,weight="weight"),d)
         
-        relabeled_graphs.append(g)
+        relabeled_graphs.add(g)
 
     return relabeled_graphs
 
@@ -100,33 +67,6 @@ async def async_generate_permuted(adj_matrix, d):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, generate_permuted, adj_matrix, d)
 
-# def generate_graphs(filename, n, d):
-    
-#     with open(filename, "r") as file:
-#         graph6_lines = [line.strip() for line in file if line.strip()]
-
-#     iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
-#     ts=time.time()
-    
-#     #draw_graphs(iso_graphs,n,d)
-#     weighted_iso_graphs=[]
-#     i=1
-#     for ig in iso_graphs:
-#         temp_ts=time.time()
-#         weighted_iso_graphs.append(ig) 
-#         weighted_graphs = set(generate_weighted(bitpack_decode(ig,n,d),d))
-    
-#         while len(weighted_graphs)>0:
-#             g=weighted_graphs.pop()
-#             weighted_iso_graphs.append(g)
-#             perms=generate_permuted(bitpack_decode(g,n,d),d)
-#             weighted_graphs.difference_update(perms)
-
-#         print(f"{i}: {time.time()-temp_ts}")
-#         i+=1
-   
-#     #print(f"end: {time.time()-ts}")
-#     return weighted_iso_graphs
 
 async def process_graph(ig,n,d,output_dir, index):
         temp_ts=time.time()
@@ -159,11 +99,6 @@ async def generate_graphs(filename, n, d):
 
     output_dir = os.path.join(os.getcwd(), str(n))
     os.makedirs(output_dir, exist_ok=True)
-    #draw_graphs(iso_graphs,n,d)
-    #i=1
-    
-        #print(f"{i}: {time.time()-temp_ts}")
-        #i+=1
     await asyncio.gather(*[process_graph(ig,n,d,output_dir,i) for i,ig in enumerate(iso_graphs)])
     print(f"end: {time.time()-ts}")
 
@@ -171,29 +106,25 @@ def total_weight(graph):
     bit_length=int(graph).bit_length()
     pair_sum = []
     for i in range(0, bit_length, 2):
-        # Extract the current pair of bits
-        pair = (graph >> i) & 0b11  # Mask the last two bits
-        pair_sum.append(pair)  # Count the number of set bits in the pair
+        pair = (graph >> i) & 0b11 
+        pair_sum.append(pair)  
 
-    return sum(pair_sum)  # Reverse to maintain left-to-right order
+    return sum(pair_sum)
 
 def find_orbit(start_graph, n, d):
     queue = deque([start_graph])  # BFS queue
-    visited = []  # Set of visited graphs
-    visited.append(start_graph)
+    visited = set()  # Set of visited graphs
+    visited.add(start_graph)
     
     # Define all possible scaling and complementation factors
     scaling_factors = range(2, d)  # Local scaling factors (mod d)
     complementing_factors = range(1, d)
-    min_graph=visited[0]
+    
 
     while queue:
         current = queue.popleft()
         current_matrix = bitpack_decode(current, n, d)
-        if current.bit_count()<=min_graph.bit_count():
-                if total_weight(current)<=total_weight(min_graph):
-                    if current<min_graph:
-                        min_graph=current
+       
       
         for v in range(n):
             # Local scaling
@@ -202,7 +133,7 @@ def find_orbit(start_graph, n, d):
                 local_scaling(scaled_matrix, v, k, d)
                 encoded_scaled = bitpack_encode(scaled_matrix, d)
                 if encoded_scaled not in visited:
-                    visited.append(encoded_scaled)
+                    visited.add(encoded_scaled)
                     queue.append(encoded_scaled)
             
             # Local complementation
@@ -211,68 +142,106 @@ def find_orbit(start_graph, n, d):
                 local_complementation(complemented_matrix, v, k, d)
                 encoded_complemented = bitpack_encode(complemented_matrix, d)
                 if encoded_complemented not in visited:
-                    visited.append(encoded_complemented)
+                    visited.add(encoded_complemented)
                     queue.append(encoded_complemented)
     #print(len(visited))
-    return visited, min_graph
+    return visited
 
 
-def find_orbit_isomorphic(start_graph, n, d):
+def all_complementations(current,current_level, n, d, visited):
+    """
+    Process a single graph: apply local scaling and complementation.
+    Returns a set of new unique graphs found in this step.
+    """
+    current_matrix = bitpack_decode(current, n, d)
+    scaling_factors = range(2, d)
+    complementing_factors = range(1, d)
+    new_graphs = set()
+
+    for v in range(n):
+        # Local scaling
+        for k in scaling_factors:
+            scaled_matrix = current_matrix.copy()
+            local_scaling(scaled_matrix, v, k, d)
+            encoded_scaled = bitpack_encode(scaled_matrix, d)
+            if encoded_scaled not in visited and encoded_scaled not in current_level:
+                new_graphs.add(encoded_scaled)
+
+        # Local complementation
+        for k in complementing_factors:
+            complemented_matrix = current_matrix.copy()
+            local_complementation(complemented_matrix, v, k, d)
+            encoded_complemented = bitpack_encode(complemented_matrix, d)
+            if encoded_complemented not in visited and encoded_complemented not in current_level:
+                new_graphs.add(encoded_complemented)
+
+    return new_graphs
+
+
+
+def find_orbit_isomorphic(start_graph, graphs, n, d):
     queue = deque([start_graph])  # BFS queue
     visited = set()  # Set of visited graphs
     visited.add(start_graph)
     ts=time.time()
-    # Define all possible scaling and complementation factors
-    scaling_factors = range(2, d)  # Local scaling factors (mod d)
-    complementing_factors = range(1, d)
     min_graph=start_graph
-    temp_level=set()
-    
+    pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
     while queue:
-        temp_perms=set()
         current_level = list(queue)
         queue.clear()
         print(f"{len(current_level)}:{time.time()-ts}")
-        for current in current_level:
-            
-            current_matrix = bitpack_decode(current, n, d)
-            if current.bit_count()<=min_graph.bit_count():
-                if total_weight(current)<=total_weight(min_graph):
-                    if current<min_graph:
-                        min_graph=current
-            
-            for v in range(n):
-                # Local scaling
-                for k in scaling_factors:
-                    scaled_matrix = current_matrix.copy()
-                    local_scaling(scaled_matrix, v, k, d)
-                    encoded_scaled = bitpack_encode(scaled_matrix, d)
-                    if (encoded_scaled not in visited) or (encoded_scaled not in temp_perms):
-                        perms=generate_permuted(scaled_matrix,d)
-                        encoded_scaled = min(perms)
-                        temp_perms.update(perms)
-                        if encoded_scaled not in visited:
-                            temp_level.add(encoded_scaled)
-                            visited.add(encoded_scaled)
-                
-                # Local complementation
-                for k in complementing_factors:
-                    complemented_matrix = current_matrix.copy()
-                    local_complementation(complemented_matrix, v, k, d)
-                    encoded_complemented = bitpack_encode(complemented_matrix, d)
-                    if (encoded_complemented not in visited) or (encoded_complemented not in temp_perms):
-                        perms=generate_permuted(complemented_matrix,d)
-                        encoded_complemented = min(perms)
-                        temp_perms.update(perms)
-                        if encoded_complemented not in visited:
-                            temp_level.add(encoded_complemented)
-                            visited.add(encoded_complemented)
-
-            while temp_level:
-                g=temp_level.pop()
+        results = pool.starmap(all_complementations, [(g, current_level, n, d, visited) for g in current_level])
+        temp_level=set().union(*results)
+        
+        while temp_level:
+            g=temp_level.pop()
+            visited.add(g)
+            perms=generate_permuted(bitpack_decode(g,n,d),d)
+            temp_level.difference_update(perms)
+            graphs.difference_update(perms)
+            if g not in temp_level:
                 queue.append(g)
-
+    
     return visited, min_graph
+
+# for current in current_level:
+            
+#             current_matrix = bitpack_decode(current, n, d)
+#             # if current.bit_count()<=min_graph.bit_count():
+#             #     if total_weight(current)<=total_weight(min_graph):
+#             #         if current<min_graph:
+#             #             min_graph=current
+            
+#             for v in range(n):
+#                 # Local scaling
+#                 for k in scaling_factors:
+#                     scaled_matrix = current_matrix.copy()
+#                     local_scaling(scaled_matrix, v, k, d)
+#                     encoded_scaled = bitpack_encode(scaled_matrix, d)
+#                     if (encoded_scaled not in visited) or (encoded_scaled not in current_level):
+#                         perms=generate_permuted(scaled_matrix,d)
+#                         encoded_scaled = min(perms)
+#                         if encoded_scaled not in visited:
+#                             temp_level.add(encoded_scaled)
+#                             visited.add(encoded_scaled)
+                
+#                 # Local complementation
+#                 for k in complementing_factors:
+#                     complemented_matrix = current_matrix.copy()
+#                     local_complementation(complemented_matrix, v, k, d)
+#                     encoded_complemented = bitpack_encode(complemented_matrix, d)
+#                     if (encoded_complemented not in visited) or (encoded_complemented not in current_level):
+#                         perms=generate_permuted(complemented_matrix,d)
+#                         encoded_complemented = min(perms)
+#                         if encoded_complemented not in visited:
+#                             temp_level.add(encoded_complemented)
+#                             visited.add(encoded_complemented)
+
+#             while temp_level:
+#                 g=temp_level.pop()
+#                 queue.append(g)
+
+
 
 def orbit_search(n,d):
     # Read the graph6 file
@@ -332,6 +301,35 @@ async def orbit_search_isomorphic(filename,n,d):
     print(f"End: {time.time()-ts}")
     return orbits
 
+# def orbit_search_isomorphic_from_file(n,d):
+#     # Read the graph6 file
+#     graphs = set()
+#     ts=time.time()
+#     # List all files in the directory
+#     directory=os.path.join(os.getcwd(), str(n))
+#     for filename in os.listdir(directory):
+#         file_path = os.path.join(directory, filename)
+
+#         # Ensure we only read files (skip directories)
+#         if os.path.isfile(file_path):
+#             with open(file_path, "r") as file:
+#                 for line in file:
+#                     graph = int(line.strip())  # Convert graph from string to integer
+#                     graphs.add(graph)
+#     orbit_reps=[]
+#     orbits=[]
+#     while graphs:
+#         current_graph = graphs.pop()
+#         print(f"Before orbit: {time.time()-ts}")
+#         orbit, min_graph = find_orbit_isomorphic(current_graph,graphs,n,d)
+#         print(f"{min_graph}:{len(orbit)}:{orbit}")
+#         orbit_reps.append(min_graph)
+#         orbits.append(orbit)
+#         print(f"After orbit: {time.time()-ts}")
+#         graphs.difference_update(orbit)
+#     print(len(orbit_reps))
+#     print(f"End: {time.time()-ts}")
+#     return orbits, orbit_reps
 def orbit_search_isomorphic_from_file(n,d):
     # Read the graph6 file
     graphs = set()
@@ -352,20 +350,163 @@ def orbit_search_isomorphic_from_file(n,d):
     while graphs:
         current_graph = graphs.pop()
         print(f"Before orbit: {time.time()-ts}")
-        orbit, min_graph = find_orbit_isomorphic(current_graph,n,d)
-        print(f"{min_graph}:{len(orbit)}:{orbit}")
-        orbit_reps.append(min_graph)
-        orbits.append(orbit)
+        orbit= find_orbit(current_graph,n,d)
+        
+        
+       
         print(f"After orbit: {time.time()-ts}")
-        graphs.difference_update(orbit)
+        orbit_filtered=set()
+        while orbit:
+            g=orbit.pop()
+            perms=generate_permuted(bitpack_decode(g,n,d),d)
+            orbit_filtered.add(min(perms))
+            orbit.difference_update(perms)
+            graphs.difference_update(perms)
+        orbits.append(orbit_filtered)
+        min_graph=min(orbit_filtered)
+        orbit_reps.append(min_graph)
+        
+        
     print(len(orbit_reps))
     print(f"End: {time.time()-ts}")
     return orbits, orbit_reps
 
 
+def create_complementation_layer(current,n,d):
+    scaling_factors = range(2, d)
+    complementing_factors = range(1, d)
+    sub_G=nx.Graph()
+    sub_G.add_node(current)
+    current_matrix=bitpack_decode(current,n,d)
+    for v in range(n):
+        # Local scaling
+        for k in scaling_factors:
+            scaled_matrix = current_matrix.copy()
+            local_scaling(scaled_matrix, v, k, d)
+            encoded_scaled = bitpack_encode(scaled_matrix, d)
+            if encoded_scaled not in sub_G.nodes:
+                perms=generate_permuted(scaled_matrix,d)
+                encoded_scaled=min(perms)
+                sub_G.add_node(encoded_scaled)
+                sub_G.add_edge(current,encoded_scaled)
+
+        # Local complementation
+        for k in complementing_factors:
+            complemented_matrix = current_matrix.copy()
+            local_complementation(complemented_matrix, v, k, d)
+            encoded_complemented = bitpack_encode(complemented_matrix, d)
+            if encoded_complemented not in sub_G.nodes:
+                perms=generate_permuted(complemented_matrix,d)
+                encoded_complemented=min(perms)
+                sub_G.add_node(encoded_complemented)
+                sub_G.add_edge(current,encoded_complemented)
+    return sub_G
+
+def orbit_atlas(n,d):
+    graphs=set()
+    ts=time.time()
+    directory=os.path.join(os.getcwd(), str(n))
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+
+        # Ensure we only read files (skip directories)
+        if os.path.isfile(file_path):
+            with open(file_path, "r") as file:
+                for line in file:
+                    graph = int(line.strip())  # Convert graph from string to integer
+                    graphs.add(graph)
+    G=nx.Graph()
+    G.add_nodes_from(graphs)
+
+    num_workers = multiprocessing.cpu_count()
+    with multiprocessing.Pool(num_workers) as pool:
+        while graphs:
+            batch_size = min(len(graphs), num_workers)
+            batch = [graphs.pop() for _ in range(batch_size)]
+            print(f"{len(graphs)}:{time.time()-ts}")
+            subgraphs = pool.starmap(create_complementation_layer, [(g, n, d) for g in batch])
+            for sub_G in subgraphs:
+                G.update(sub_G)
+    return G
+
+def separate_orbits(G):
+    components = list(nx.connected_components(G))
+    subgraphs = [G.subgraph(nodes).copy() for nodes in components]
+    return subgraphs
+
+def circular_subgraph_layout(n, center, radius):
+    """ Arrange n points in a circular layout inside a given center and radius. """
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    return {i: center + radius * np.array([np.cos(angle), np.sin(angle)]) for i, angle in enumerate(angles)}
+
+def draw_subgraph_inside_circle(ax, center, radius, adjacency_matrix):
+    """ Draws a small subgraph inside a circular boundary. """
+    subG = nx.from_numpy_array(adjacency_matrix)  # Convert adjacency matrix to NetworkX graph
+    pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)  # Keep subgraph size, shrink nodes
+
+    # Get weighted edges
+    edges = [(u, v) for u, v in subG.edges()]
+    edge_weights = {(u, v): int(adjacency_matrix[u, v]) for u, v in edges if adjacency_matrix[u, v] > 0}
+
+    # Draw subgraph edges (light blue)
+    nx.draw_networkx_edges(subG, pos, ax=ax, edge_color='blue', alpha=0.8, width=0.5)
+
+    # Draw subgraph nodes (light blue fill, black outline)
+    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=20, node_color='blue', edgecolors='black', linewidths=0.6)
+
+    # Draw edge weights (small font)
+    nx.draw_networkx_edge_labels(subG, pos, edge_labels=edge_weights, ax=ax, font_size=4, font_color='black')
+
+def plot_graph(G, n, d):
+    """
+    Plot a graph G using NetworkX with each node as a circle containing a small graph.
+    Parameters:
+        G (networkx.Graph): The main graph to be plotted.
+        bitpack_decode (function): Function to decode node labels into adjacency matrices.
+        n (int): Number of vertices in each subgraph.
+        d (int): Parameter for decoding function.
+    """
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    pos = nx.spring_layout(G, seed=42, k=1/np.sqrt(len(G.nodes)))  # Layout for main graph
+
+    # Draw main graph edges (light blue)
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='blue', alpha=0.7, width=0.8)
+
+    # Draw main graph nodes as circles
+    for node in G.nodes():
+        x, y = pos[node]  # Get node position
+        
+        # Draw a large circle for the node (white fill, black border)
+        circle = plt.Circle((x, y), 0.1, color='white', ec='black', lw=1.2)
+        ax.add_patch(circle)
+        
+        # Get adjacency matrix for the subgraph
+        adjacency_matrix = bitpack_decode(node, n, d)
+        
+        # Draw the subgraph inside the node circle
+        draw_subgraph_inside_circle(ax, (x, y), 0.08, adjacency_matrix)
+
+    # Set axis limits and aspect ratio
+    ax.set_xlim(min(x for x, y in pos.values()) - 0.2, max(x for x, y in pos.values()) + 0.2)
+    ax.set_ylim(min(y for x, y in pos.values()) - 0.2, max(y for x, y in pos.values()) + 0.2)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # Add a title
+    plt.title(f"Graph with {len(G.nodes)} Nodes and {len(G.edges)} Edges", fontsize=14)
+    plt.show()
 n=7
 d=3
-if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
+# if __name__ == "__main__":
+#     multiprocessing.freeze_support()
+#     asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
 #orbit_search_isomorphic_from_file(n,d)
+ts=time.time()
+g=orbit_atlas(n,d)
+print(time.time()-ts)
+# orbits=separate_orbits(g)
+# print(time.time()-ts)
+# for o in orbits:
+#     plot_graph(o,n,d)
+#plot_graph(g,n,d)
