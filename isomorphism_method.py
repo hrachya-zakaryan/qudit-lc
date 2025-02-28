@@ -11,7 +11,7 @@ import concurrent.futures
 import multiprocessing
 import os
 from matplotlib import pyplot as plt
-
+import subprocess
 
 def generate_permuted(adj_matrix,d):
     """Generate all possible vertex permutations of an adjacency matrix."""
@@ -429,6 +429,48 @@ def orbit_atlas(n,d):
                 G.update(sub_G)
     return G
 
+
+def call_complementation_layer(n, d, encoded_value):
+    """ Calls the C program and returns results as a set. """
+    result = subprocess.run(
+        ["./c/complement", str(n), str(d), str(encoded_value)],  # Convert args to strings
+        capture_output=True, text=True
+    )
+
+    # Convert output lines to a set of integers
+    return {int(line) for line in result.stdout.splitlines()}
+
+
+def orbit_atlas_c(n,d):
+    graphs=set()
+    ts=time.time()
+    directory=os.path.join(os.getcwd(), str(n))
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+
+        # Ensure we only read files (skip directories)
+        if os.path.isfile(file_path):
+            with open(file_path, "r") as file:
+                for line in file:
+                    graph = int(line.strip())  # Convert graph from string to integer
+                    graphs.add(graph)
+    G=nx.Graph()
+    G.add_nodes_from(graphs)
+
+    num_workers = multiprocessing.cpu_count()
+    with multiprocessing.Pool(num_workers) as pool:
+        while graphs:
+            batch_size = min(len(graphs), num_workers)
+            batch = [graphs.pop() for _ in range(batch_size)]
+            print(f"{len(graphs)}:{time.time()-ts}")
+            complements = pool.starmap(call_complementation_layer, [(n, d, g) for g in batch])
+            for i in range(batch_size):
+                for complement in complements[i]:
+                    G.add_edge(batch[i],complement)
+    return G
+
+
+
 def separate_orbits(G):
     components = list(nx.connected_components(G))
     subgraphs = [G.subgraph(nodes).copy() for nodes in components]
@@ -502,11 +544,12 @@ d=3
 #     multiprocessing.freeze_support()
 #     asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
 #orbit_search_isomorphic_from_file(n,d)
-ts=time.time()
-g=orbit_atlas(n,d)
-print(time.time()-ts)
+# ts=time.time()
+# g=orbit_atlas(n,d)
+# print(time.time()-ts)
 # orbits=separate_orbits(g)
 # print(time.time()-ts)
 # for o in orbits:
 #     plot_graph(o,n,d)
 #plot_graph(g,n,d)
+g=orbit_atlas_c(n,d)
