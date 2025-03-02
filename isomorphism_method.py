@@ -433,7 +433,7 @@ def orbit_atlas(n,d):
 def call_complementation_layer(n, d, encoded_value):
     """ Calls the C program and returns results as a set. """
     result = subprocess.run(
-        ["./c/complement", str(n), str(d), str(encoded_value)],  # Convert args to strings
+        ["./c/a.exe", str(n), str(d), str(encoded_value)],  # Convert args to strings
         capture_output=True, text=True
     )
 
@@ -542,14 +542,25 @@ n=7
 d=3
 # if __name__ == "__main__":
 #     multiprocessing.freeze_support()
-#     asyncio.run(generate_graphs(f"d3n{n}.txt", n, d))
+#     g=orbit_atlas_c(n,d)
+#     nx.write_edgelist(g,f"orbits_d{d}_n{n}", data=False)
+
+
 #orbit_search_isomorphic_from_file(n,d)
-# ts=time.time()
-# g=orbit_atlas(n,d)
+ts=time.time() 
+
+
+g=nx.read_edgelist(f"orbits_d{d}_n{n}", nodetype=int)
+print(time.time()-ts)
+orbits=separate_orbits(g)
+print(time.time()-ts)
+directory = f"orbits_d{d}_n{n}_separated"
+os.makedirs(directory, exist_ok=True)
+for i in range(len(orbits)):
+    nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
+
 # print(time.time()-ts)
-# orbits=separate_orbits(g)
-# print(time.time()-ts)
-# for o in orbits:
-#     plot_graph(o,n,d)
-#plot_graph(g,n,d)
-g=orbit_atlas_c(n,d)
+#for o in orbits:
+#   plot_graph(o,n,d)
+
+#orbit_atlas_c(n,d)
