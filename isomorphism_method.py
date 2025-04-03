@@ -8,6 +8,8 @@ import os
 from matplotlib import pyplot as plt
 import subprocess
 import matplotlib.lines as mlines
+import sympy as sp
+from itertools import combinations
 
 def total_weight(graph):
     bit_length=int(graph).bit_length()
@@ -151,7 +153,7 @@ def plot_graph(G, n, d):
         ax.add_patch(circle)
         
         # Get adjacency matrix for the subgraph
-        adjacency_matrix = bitpack_decode(node, n, d)
+        adjacency_matrix = bitpack_decode(int(node), n, d)
         
         # Draw the subgraph inside the node circle
         draw_subgraph_inside_circle(ax, (x, y), 0.08, adjacency_matrix)
@@ -172,11 +174,223 @@ def plot_graph(G, n, d):
     
     ax.legend(handles=legend_elements, loc='upper right', fontsize=10, frameon=True)
     plt.show()
-n=5
-d=7
 
-#generate_graphs_c(n,d,"c/generate_graphs")
-g=orbit_atlas_c("c/complement",n,d)
+def call_measure(n,d,directory,i,strategy):
+    current_measure=0
+    orbit=nx.read_edgelist(directory+f"/orbit_{i}", data=False)
+    exists_two_colorable=False
+    for g in orbit.nodes:
+        adj_matrix=bitpack_decode(int(g),n,d)
+        nx_g=nx.from_numpy_array(adj_matrix)
+        coloring = nx.coloring.greedy_color(nx_g, strategy=strategy)
+        if max(coloring.values())==1:
+            exists_two_colorable=True
+            break
+    max_max_rank=0
+    found=False
+    for g in orbit.nodes:
+        result=calculate_schmidt_measure(g,exists_two_colorable, max_max_rank,n,d, strategy)
+        if type(result[1])==int:
+            max_max_rank=result[1]
+        if result[2]==True:
+            current_measure=result[0]
+            if type(result[1])==bool:
+                found=True
+                break
+    if type(current_measure) == int and current_measure==0:
+        current_measure=[0,0]
+    if found==False:
+        temp_graphs=list(orbit.nodes)
+        for j in range(1,n-3): 
+            graphs=temp_graphs.copy()
+            temp_graphs=[]
+            for g in graphs:
+                adj_matrix=bitpack_decode(int(g),n-j+1,d)
+                nx_g=nx.from_numpy_array(adj_matrix)
+                for v in nx_g.nodes:
+                    temp_nx_g=nx_g.copy()
+                    temp_nx_g.remove_node(v)
+                    if nx.is_connected(temp_nx_g):
+                        temp_graphs.append(bitpack_encode(nx.to_numpy_array(temp_nx_g,dtype=int),d))
+                        mapping = dict(zip(temp_nx_g, range(n-j)))
+                        temp_nx_g=nx.relabel_nodes(temp_nx_g, mapping)
+                        result=sub_calculate_schmidt_measure(temp_nx_g,n-j,d, strategy)
+                        if result !=0 and (current_measure[1]==0 or result+j<current_measure[1]):
+                            current_measure[1]=result+j
+                            #print(j)
+                        if result !=0 and (result>current_measure[0]):
+                            current_measure[0]=result
+                        if result !=0 and current_measure[0]==current_measure[1]:
+                            break
+                if current_measure[0]==current_measure[1]:
+                    break
+            if current_measure[1]!=0 and current_measure[0]==current_measure[1]:
+                current_measure=current_measure[1]
+                found = True
+                break
+        print(f"{i}:{current_measure}:Color")
+    if found == False:
+        for g in orbit.nodes:
+            adj_matrix=bitpack_decode(int(g),n,d)
+            nx_g=nx.from_numpy_array(adj_matrix)
+            result =  all_bipartitions_measure(adj_matrix,n,d)
+            if result != 0  and result > current_measure[0]:
+                current_measure[0]=result
+        print(f"{i}:{current_measure}")
+    else:
+        print(f"{i}:{current_measure}:Early")
+    return current_measure
+
+
+def all_bipartitions_measure(adj_matrix,n,d):
+    nx_g=nx.from_numpy_array(adj_matrix)
+    max_rank=0
+    for i in range(1, n // 2 + 1):
+        for subset in combinations(list(nx_g.nodes), i):
+            submatrix=adj_matrix[np.ix_(sorted(subset),sorted(set(nx_g.nodes)-set(subset)))]
+            rank = rank_over_finite_field(submatrix,d)
+            if rank>max_rank:
+                max_rank=rank
+    return max_rank
+
+
+
+def orbit_schmidt_measure(n,d, strategy):
+    
+    directory=f"orbits_d{d}_n{n}_separated"
+    num_orbits=len(list(os.listdir(directory)))
+    schmidt_measures=[]
+    num_workers = multiprocessing.cpu_count()
+    orbits=list(range(num_orbits))
+    with multiprocessing.Pool(num_workers) as pool:
+        while orbits:
+            batch_size = min(len(orbits), num_workers)
+            batch = [orbits.pop(0) for _ in range(batch_size)]
+            schmidt_measures.extend(pool.starmap(call_measure, [(n, d, directory, i, strategy) for i in batch]))
+            print(len(orbits))                
+    return schmidt_measures
+
+
+def sub_calculate_schmidt_measure(nx_g,n,d, strategy):
+    adj_matrix=nx.to_numpy_array(nx_g,dtype=int)
+    coloring = nx.coloring.greedy_color(nx_g, strategy=strategy)
+    color_classes = {c: [v for v in coloring if coloring[v] == c] for c in set(coloring.values())}
+    if max(coloring.values()) == 1 and rank_over_finite_field(adj_matrix,d)==n:
+        return n//2
+        
+    elif max(coloring.values()) == 1:
+        max_rank = 0
+        colors=list(color_classes.keys())
+        min1=10
+        for k in range(len(colors)):
+            A = color_classes[colors[k]]  # One part of the bipartition
+            if len(A)<min1:
+                min1=len(A)
+            B = [v for j in range(len(colors)) if j != k for v in color_classes[colors[j]]]  # Other part
+            submatrix=adj_matrix[np.ix_(A, B)]
+            rank = rank_over_finite_field(submatrix,d)
+            max_rank = max(max_rank, rank)
+        if max_rank==min1:
+            return max_rank
+        elif max_rank==n//2:
+            return max_rank
+    elif max(coloring.values()) == 2:
+        max_rank = 0
+        colors=list(color_classes.keys())
+        min1=10
+        min2=10
+        for k in range(len(colors)):
+            A = color_classes[colors[k]]  # One part of the bipartition
+            if len(A)<min1:
+                min1=len(A)
+            elif len(A)<min2:
+                min2=len(A)
+            B = [v for j in range(len(colors)) if j != k for v in color_classes[colors[j]]]  # Other part
+            submatrix=adj_matrix[np.ix_(A, B)]
+            rank = rank_over_finite_field(submatrix,d)
+            max_rank = max(max_rank, rank)
+        if max_rank==min1+min2:
+            return max_rank
+    elif max(coloring.values()) == 1:
+        return n//2
+    return 0
+
+def calculate_schmidt_measure(g, exists_two_colorable, max_max_rank,n,d, strategy):
+    adj_matrix=bitpack_decode(int(g),n,d)
+    nx_g=nx.from_numpy_array(adj_matrix)
+    coloring = nx.coloring.greedy_color(nx_g, strategy=strategy)
+    color_classes = {c: [v for v in coloring if coloring[v] == c] for c in set(coloring.values())}
+    if max(coloring.values()) == 1 and rank_over_finite_field(adj_matrix,d)==n:
+        return n//2, True, True
+        
+    elif max(coloring.values()) == 1:
+        max_rank = 0
+        colors=list(color_classes.keys())
+        min1=10
+        for k in range(len(colors)):
+            A = color_classes[colors[k]]  # One part of the bipartition
+            if len(A)<min1:
+                min1=len(A)
+            B = [v for j in range(len(colors)) if j != k for v in color_classes[colors[j]]]  # Other part
+            submatrix=adj_matrix[np.ix_(A, B)]
+            rank = rank_over_finite_field(submatrix,d)
+            max_rank = max(max_rank, rank)
+        if max_rank==min1:
+            return max_rank, True, True
+        elif max_rank==n//2:
+            return max_rank, True, True
+        elif  max_max_rank<=max_rank:
+            max_max_rank=max_rank
+            #print(f"{max_rank}<{n//2}")
+            # draw_graph(int(g),n,d)
+            # plot_graph(orbit,n,d)
+            
+            return [max_rank,n//2], max_max_rank, True
+    elif max(coloring.values()) == 2:
+        max_rank = 0
+        colors=list(color_classes.keys())
+        min1=10
+        min2=10
+        for k in range(len(colors)):
+            A = color_classes[colors[k]]  # One part of the bipartition
+            if len(A)<min1:
+                min1=len(A)
+            elif len(A)<min2:
+                min2=len(A)
+            B = [v for j in range(len(colors)) if j != k for v in color_classes[colors[j]]]  # Other part
+            submatrix=adj_matrix[np.ix_(A, B)]
+            rank = rank_over_finite_field(submatrix,d)
+            max_rank = max(max_rank, rank)
+        if max_rank==min1+min2:
+            return max_rank, True, True
+
+        elif max_max_rank<max_rank:
+            max_max_rank=max_rank
+            if exists_two_colorable:
+                #print(f"{max_rank}<{n//2}")
+                return [max_rank,n//2], max_max_rank, True
+            else:
+                #print(f"{max_rank}<")
+                return [max_rank,0], max_max_rank, True
+            # draw_gfrom itertools import combinationsaph(orbit,n,d)
+    return 0, False, False
+def mod_inv(a, d):
+    """Compute modular inverse of a mod d (assuming d is prime)."""
+    return pow(a, -1, d)  # Python 3.8+ supports pow(a, -1, d) for modular inverse
+
+def rank_over_finite_field(matrix, d):
+    """Compute the rank of a matrix over the finite field F_d."""
+    mat = sp.Matrix(matrix).applyfunc(lambda x: x % d)  # Reduce elements mod d
+    rref_matrix, pivot_cols = mat.rref(iszerofunc=lambda x: x % d == 0)
+    return len(pivot_cols)
+
+
+n=7
+d=2
+print(orbit_schmidt_measure(n,d,'independent_set'))
+
+# generate_graphs_c(n,d,"c/generate_graphs")
+# g=orbit_atlas_c("c/complement",n,d)
 # if __name__ == "__main__":
 #     multiprocessing.freeze_support()
 #     g=orbit_atlas_c(n,d)
@@ -185,16 +399,27 @@ g=orbit_atlas_c("c/complement",n,d)
 # print("Edges:", g.number_of_edges())
 # encoded_value=bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes("EU~w".encode()),dtype=int),d)
 # call_generate_graphs(n,d, encoded_value,"c/generate_graphs",96,time.time())
-orbits=separate_orbits(g)
+# orbits=separate_orbits(g)
 
-directory = f"orbits_d{d}_n{n}_separated"
-os.makedirs(directory, exist_ok=True)
-for i in range(len(orbits)):
-    nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
+# directory = f"orbits_d{d}_n{n}_separated"
+# os.makedirs(directory, exist_ok=True)
+# for i in range(len(orbits)):
+#     nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
 
 # # print(time.time()-ts)
 # for o in orbits:
 #   plot_graph(o,n,d)
-#print(len(orbits))
-
+# nx.draw(g)
+# plt.show()
 #orbit_atlas_c(n,d)
+# strategies=['largest_first','random_sequential','independent_set','connected_sequential_bfs','connected_sequential_dfs','saturation_largest_first']
+# for strategy in strategies:
+#     print(strategy)
+#     print(orbit_schmidt_measure(n,d,strategy))
+#g=nx.from_numpy_array(bitpack_decode(703, n, d))
+# nx.draw(g)
+# plt.show()
+# g.remove_node(1)
+# nx.draw(g)
+# plt.show()
+#calculate_schmidt_measure(703,False,0,n,d)
