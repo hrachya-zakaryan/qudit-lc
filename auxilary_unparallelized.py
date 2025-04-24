@@ -34,7 +34,7 @@ def draw_graphs(encoded_graphs, n, d, cols=3):
                 if adjacency_matrix[v, u] > 0:
                     G.add_edge(v, u, weight=adjacency_matrix[v, u])
 
-        pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
+        pos = nx.spring_layout(G)  
         edge_labels = {(u, v): f"{w}" for u, v, w in G.edges.data("weight")}
         
         nx.draw(G, pos, ax=ax, with_labels=True, node_color="lightblue", node_size=500, font_weight="bold")
@@ -86,8 +86,9 @@ def draw_representatives(encoded_graphs, d, cols=3):
 
         # Set edge colors based on the weight
         edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
-        #pos=nx.nx_agraph.graphviz_layout(subG, prog='circo')
-        pos=nx.circular_layout(subG)
+        
+        pos = nx.nx_agraph.graphviz_layout(subG, prog='circo')
+        
         # Draw subgraph edges with the appropriate color
         nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=2)
         
