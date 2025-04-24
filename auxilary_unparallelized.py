@@ -34,7 +34,7 @@ def draw_graphs(encoded_graphs, n, d, cols=3):
                 if adjacency_matrix[v, u] > 0:
                     G.add_edge(v, u, weight=adjacency_matrix[v, u])
 
-        pos = nx.spring_layout(G)  
+        pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
         edge_labels = {(u, v): f"{w}" for u, v, w in G.edges.data("weight")}
         
         nx.draw(G, pos, ax=ax, with_labels=True, node_color="lightblue", node_size=500, font_weight="bold")
@@ -50,7 +50,59 @@ def draw_graphs(encoded_graphs, n, d, cols=3):
     plt.tight_layout()
     plt.show()
 
+def circular_subgraph_layout(n, center, radius):
+    """ Arrange n points in a circular layout inside a given center and radius. """
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    return {i: center + radius * np.array([np.cos(angle), np.sin(angle)]) for i, angle in enumerate(angles)}
 
+def draw_representatives(encoded_graphs, d, cols=3):
+    """
+    Draws multiple graphs given their bit encoding.
+
+    Parameters:
+        encoded_graphs (list of int): A list of bit-encoded graphs.
+        n (int): Number of vertices in the graphs.
+        d (int): Modulo value for weights (used for decoding).
+        cols (int): Number of columns in the subplot grid (default: 3).
+    """
+    center=(1,0)
+    radius=0.01
+    num_graphs = len(encoded_graphs)
+    rows = (num_graphs + cols - 1) // cols  # Compute number of rows needed
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4))  # Create subplots
+    axes = axes.flatten() if num_graphs > 1 else [axes]  # Flatten axes for easy iteration
+
+    for i, encoded_graph in enumerate(encoded_graphs):
+        ax = axes[i]
+        n=encoded_graph[1][0]
+        adjacency_matrix = bitpack_decode(encoded_graph[0], n, d)
+        
+        subG = nx.from_numpy_array(adjacency_matrix)  # Convert adjacency matrix to NetworkX graph
+        pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)  # Keep subgraph size, shrink nodes
+
+        # Get weighted edges
+        edges = [(u, v) for u, v in subG.edges()]
+
+        # Set edge colors based on the weight
+        edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
+        #pos=nx.nx_agraph.graphviz_layout(subG, prog='circo')
+        pos=nx.circular_layout(subG)
+        # Draw subgraph edges with the appropriate color
+        nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=2)
+        
+        # Draw subgraph nodes (light blue fill, black outline)
+        nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=40, node_color='blue', edgecolors='black', linewidths=1)
+        
+        ax.set_title(f"Graph {i+1}")
+        ax.axis("off")  # Hide axis
+
+    # Hide any unused subplot axes
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.show()
 
 
 def draw_graph(encoded_graph, n, d):
@@ -89,7 +141,7 @@ def draw_graph(encoded_graph, n, d):
 
 def bitpack_encode(matrix, d):
     n = matrix.shape[0]
-    bit_length = d.bit_length()  # Number of bits per weight
+    bit_length = (d-1).bit_length()  # Number of bits per weight
     packed = 0
     shift = 0
     
@@ -103,7 +155,7 @@ def bitpack_encode(matrix, d):
     return int(packed)
 
 def bitpack_decode(packed, n, d):
-    bit_length = d.bit_length()
+    bit_length = (d-1).bit_length()
     matrix = np.zeros((n, n), dtype=int)
     shift = 0
     
