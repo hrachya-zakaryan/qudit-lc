@@ -1,6 +1,10 @@
 import networkx as nx
 from collections import deque
+<<<<<<< Updated upstream
 from auxilary_unparallelized import local_complementation, local_scaling, bitpack_decode, bitpack_encode, draw_graph, draw_graphs, draw_representatives
+=======
+from auxilary_unparallelized import local_complementation, local_scaling, bitpack_decode, bitpack_encode, draw_graph, draw_graphs
+>>>>>>> Stashed changes
 import numpy as np
 import time
 import multiprocessing
@@ -20,6 +24,7 @@ def total_weight(graph):
     return sum(pair_sum)
 
 
+<<<<<<< Updated upstream
 def call_generate_graphs(n,d, encoded_value,path,index):
     """
     Calls the C code to generate all non-isomorphic weighted graphs
@@ -37,10 +42,22 @@ def call_generate_graphs(n,d, encoded_value,path,index):
     result = subprocess.run([path, str(n), str(d), str(encoded_value)], capture_output=True, text=True) #Calls the C code
     output_dir = os.path.join(os.getcwd(),f"d{d}_c",str(n))
     graphs = {int(line) for line in result.stdout.splitlines()} #Parse the C output
+=======
+def call_generate_graphs(n,d, encoded_value,path,index,ts):
+    #print("start:",index,":",time.time()-ts)
+    result = subprocess.run(
+        [path, str(n), str(d), str(encoded_value)], 
+        capture_output=True, text=True
+    )
+    print("end", index,":",time.time()-ts)
+    output_dir = os.path.join(os.getcwd(),f"d{d}_c",str(n))
+    graphs = {int(line) for line in result.stdout.splitlines()}
+>>>>>>> Stashed changes
     output_file = os.path.join(output_dir, f"{index}.txt")
     with open(output_file, "w") as f:
         for graph in graphs:
             f.write(str(graph) + "\n")
+<<<<<<< Updated upstream
 
 def generate_graphs_c(n,d,path, num_workers=multiprocessing.cpu_count()):
     """
@@ -99,6 +116,48 @@ def orbit_atlas_c(path,n,d, num_workers=multiprocessing.cpu_count()):
         d(int): Local dimension
         num_workers(int): Number of CPU threads to use. Uses all of them by default
     """
+=======
+
+def generate_graphs_c(n,d,path):
+    filename=f"d3n{n}.txt"
+    with open(filename, "r") as file:
+        graph6_lines = [line.strip() for line in file if line.strip()]
+    iso_graphs = [bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes(line.encode()),dtype=int),d) for line in graph6_lines]
+    ts=time.time()
+
+    output_dir = os.path.join(os.getcwd(),f"d{d}_c",str(n))
+    os.makedirs(output_dir, exist_ok=True)
+    num_workers = multiprocessing.cpu_count()
+    with multiprocessing.Pool(num_workers) as pool:
+        index=0
+        while iso_graphs:
+            batch_size = min(len(iso_graphs), num_workers)
+            batch = [iso_graphs.pop(0) for _ in range(batch_size)]
+            print(f"{len(iso_graphs)}:{time.time()-ts}")
+            #weighted_graphs = pool.starmap(call_generate_graphs, [(n, d, g, path,index*num_workers+batch.index(g),ts) for g in batch])
+            pool.starmap(call_generate_graphs, [(n, d, g, path,index*num_workers+batch.index(g),ts) for g in batch])
+            # for i in range(batch_size):
+            #     graphs=weighted_graphs[i]
+            #     output_file = os.path.join(output_dir, f"{index*num_workers+i}.txt")
+            #     with open(output_file, "w") as f:
+            #         for graph in graphs:
+            #             f.write(str(graph) + "\n")  # Write each graph on a new line
+            #     #print(f"{index*num_workers+i} end:{time.time()-ts}")
+            index+=1
+    
+
+
+def call_complementation_layer(n, d, encoded_value,path):
+    """ Calls the C program and returns results as a set. """
+    result = subprocess.run(
+        [path, str(n), str(d), str(encoded_value)], 
+        capture_output=True, text=True
+    )
+    return {int(line) for line in result.stdout.splitlines()}
+
+
+def orbit_atlas_c(path,n,d):
+>>>>>>> Stashed changes
     graphs=set()
     ts=time.time()
     directory=os.path.join(os.getcwd(), f"d{d}_c", str(n))
@@ -119,7 +178,11 @@ def orbit_atlas_c(path,n,d, num_workers=multiprocessing.cpu_count()):
             batch_size = min(len(graphs), num_workers)
             batch = [graphs.pop() for _ in range(batch_size)] #Create a batch
             print(f"{len(graphs)}:{time.time()-ts}")
+<<<<<<< Updated upstream
             complements = pool.starmap(call_complementation_layer, [(n, d, g, path) for g in batch]) #Run call_complementation_layer in parallel for the graphs in batch
+=======
+            complements = pool.starmap(call_complementation_layer, [(n, d, g, path) for g in batch])
+>>>>>>> Stashed changes
             for i in range(batch_size):
                 for complement in complements[i]:
                     G.add_edge(batch[i],complement) #Add the edges obtained from local scaling and local complementing
@@ -218,6 +281,7 @@ def plot_graph(G, n, d):
     plt.show()
 
 def call_measure(n,d,directory,i,strategy):
+<<<<<<< Updated upstream
     """
     Calculates the schmidt measure for orbit i.
     
@@ -233,6 +297,12 @@ def call_measure(n,d,directory,i,strategy):
     orbit=nx.read_edgelist(directory+f"/orbit_{i}", data=False) #Import orbit
     exists_two_colorable=False
     for g in orbit.nodes: #Check if there is a two colorable graph in the orbit
+=======
+    current_measure=0
+    orbit=nx.read_edgelist(directory+f"/orbit_{i}", data=False)
+    exists_two_colorable=False
+    for g in orbit.nodes:
+>>>>>>> Stashed changes
         adj_matrix=bitpack_decode(int(g),n,d)
         nx_g=nx.from_numpy_array(adj_matrix)
         coloring = nx.coloring.greedy_color(nx_g, strategy=strategy)
@@ -289,10 +359,13 @@ def call_measure(n,d,directory,i,strategy):
             result =  all_bipartitions_measure(adj_matrix,n,d)
             if result != 0  and result > current_measure[0]:
                 current_measure[0]=result
+<<<<<<< Updated upstream
             if current_measure[1]!=0 and current_measure[0]==current_measure[1]:
                 current_measure=current_measure[1]
                 found = True
                 break
+=======
+>>>>>>> Stashed changes
         print(f"{i}:{current_measure}")
     else:
         print(f"{i}:{current_measure}:Early")
@@ -442,6 +515,7 @@ def rank_over_finite_field(matrix, d):
     return len(pivot_cols)
 
 
+<<<<<<< Updated upstream
 n=7
 d=3
 #directory=f"orbits_d{d}_n{n}_separated"
@@ -461,12 +535,45 @@ draw_representatives(r,d,8)
 # encoded_value=bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes("EU~w".encode()),dtype=int),d)
 # call_generate_graphs(n,d, encoded_value,"c/generate_graphs",96,time.time())
 # orbits=separate_orbits(g)
+=======
+n=6
+d=3
+>>>>>>> Stashed changes
 
 # directory = f"orbits_d{d}_n{n}_separated"
 # os.makedirs(directory, exist_ok=True)
 # for i in range(len(orbits)):
 #     nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
 
+<<<<<<< Updated upstream
+=======
+# generate_graphs_c(n,d,"c/generate_graphs")
+# g=orbit_atlas_c("c/complement",n,d)
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    # print(orbit_schmidt_measure(n,d,'independent_set'))
+    sm_in_og = []
+    for cnt in range(3,n+1):
+        print(f"------------------------------------Start calculating for n={cnt}------------------------------------")
+        sm_in_og.append(orbit_schmidt_measure(cnt,d,'independent_set'))
+    
+    
+    with open("og_data/join_sm_in_og.txt", "w") as f:
+        f.write(str(sm_in_og))
+    # g=orbit_atlas_c(n,d)
+# g=nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_6", data=False)
+# print("Vertices:",g.number_of_nodes())
+# print("Edges:", g.number_of_edges())
+# encoded_value=bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes("EU~w".encode()),dtype=int),d)
+# call_generate_graphs(n,d, encoded_value,"c/generate_graphs",96,time.time())
+# orbits=separate_orbits(g)
+
+# directory = f"orbits_d{d}_n{n}_separated"
+# os.makedirs(directory, exist_ok=True)
+# for i in range(len(orbits)):
+#     nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
+
+>>>>>>> Stashed changes
 # # print(time.time()-ts)
 # for o in orbits:
 #   plot_graph(o,n,d)
@@ -479,7 +586,11 @@ draw_representatives(r,d,8)
 #     print(orbit_schmidt_measure(n,d,strategy))
 #g=nx.from_numpy_array(bitpack_decode(703, n, d))
 # nx.draw(g)
+<<<<<<< Updated upstream
 # plt.show()graph
+=======
+# plt.show()
+>>>>>>> Stashed changes
 # g.remove_node(1)
 # nx.draw(g)
 # plt.show()

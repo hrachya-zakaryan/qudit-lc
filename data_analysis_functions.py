@@ -1,40 +1,66 @@
+"""
+Script to perform various graph analysis and operations using NetworkX.
+
+This script includes a collection of functions for graph-related tasks such as computing the maximum degree,
+chromatic number, determining if a graph is a tree, calculating distance matrices, and other graph properties.
+It also includes functions for decoding bit-encoded graph representations, plotting distance matrices, and checking 
+planarity or self-loops. One should keep in mind that some of the functions are compuatationally heavy, for this reason
+approximation techniques were applied. In any case, they are useful to be implemented.
+
+Dependencies:
+- networkx
+- numpy
+- matplotlib
+- auxilary_unparallelized (for custom operations)
+
+Functions:
+- max_degree: Compute the maximum degree in a graph, removing self-loops.
+- chromatic_number: Compute the chromatic number of a graph using a greedy coloring algorithm.
+- is_tree: Check if a graph is a tree.
+- distance_matrix: Compute the shortest path distance matrix of a graph.
+- bfs_distance_matrix: Compute the shortest path distance matrix using BFS for unweighted graphs.
+- avg_of_distance_matrix: Compute the average shortest path length of a graph.
+- plot_distance_matrix: Plot the shortest path distance matrix of a graph.
+- average_of_distance_matrix: Compute the average shortest path distance of a graph.
+- max_in_distance_matrix: Compute the maximum shortest path distance in a graph.
+- is_planar_graph: Check if a graph is planar.
+- count_self_loops: Count the number of self-loops in a graph.
+- decode_to_net_G: Decode a bit-encoded graph into a NetworkX MultiGraph.
+- find_red_nodes: Find the minimum number of red or blue nodes in a bipartite graph.
+- chromatic_number_and_color_counts: Compute the chromatic number and color counts for a graph.
+- min_chromatic_number_in_OG: Compute the minimum chromatic number in a graph orbit.
+
+Notes:
+- The auxiliary functions such as `local_complementation`, `local_scaling`, `bitpack_decode`, and `bitpack_encode` are imported 
+  from an external module, which should be accessible for full functionality.
+"""
+
 import networkx as nx
 import numpy as np
 from collections import deque, Counter
 import matplotlib.pyplot as plt
 from auxilary_unparallelized import local_complementation, local_scaling, bitpack_decode, bitpack_encode, draw_graph
 
-# def plot_graph(G):
-#     """
-#     Plot a given graph G using NetworkX and Matplotlib with improved aesthetics.
-    
-#     Parameters:
-#         G (networkx.Graph): The graph to be plotted.
-#     """
-#     # Choose a layout for better structure
-#     pos = nx.spring_layout(G, seed=42, k=1/np.sqrt(len(G.nodes)))  # k controls spacing between nodes
-    
-#     # Get node sizes based on degree
-#     degrees = dict(G.degree())
-#     node_sizes = [100 + degrees[node] * 50 for node in G.nodes()]
-    
-#     # Draw nodes
-#     nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=node_sizes, edgecolors='black')
-    
-#     # Draw edges with transparency
-#     nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5)
-    
-#     # Draw labels
-#     nx.draw_networkx_labels(G, pos, font_size=10, font_family='sans-serif')
-    
-#     # Add a title with graph info
-#     plt.title(f"Graph with {len(G.nodes)} Nodes and {len(G.edges)} Edges", fontsize=14)
-    
-#     # Increase figure size and resolution for better visibility
-#     plt.gcf().set_size_inches(12, 10)
-#     plt.show()
+# Calculate the maximum degree in a graph
+def max_degree(g):
+    """
+    Compute the maximum degree of a graph after removing self-loops.
 
-# chromatix number of graph
+    Parameters:
+    g (networkx.Graph): A NetworkX graph object. The graph can be directed or undirected
+                        and may contain self-loops.
+
+    Returns:
+    int: The maximum degree among all nodes in the graph after self-loops have been removed.
+    """
+    g.remove_edges_from(nx.selfloop_edges(g))
+    # Compute the maximum degree 
+    delta = max(dict(g.degree()).values())
+    return delta
+
+
+
+# Chromatix number of graph
 def chromatic_number(G):
     """
     Compute the chromatic number of a graph G.
@@ -49,7 +75,7 @@ def chromatic_number(G):
     return max(coloring.values()) + 1  # The highest color index + 1
 
 
-#determine if a graph is a tree or not
+# Determine if a graph is a tree or not
 def is_tree(G):
     """
     Check if a given graph G is a tree.
@@ -63,7 +89,7 @@ def is_tree(G):
     return nx.is_connected(G) and G.number_of_edges() == G.number_of_nodes() - 1
 
 
-#distance matrix of graph
+# Distance matrix of graph. A disclamer is that for very large graphs like OG for n>6 it is possible that this calculation take very long time.
 def distance_matrix(G):
     """
     Compute the shortest path distance matrix of a graph G.
@@ -76,7 +102,7 @@ def distance_matrix(G):
     """
     return nx.floyd_warshall_numpy(G)
 
-
+# We did not used this function at the end, but it could be helpful to keep for the interested user 
 def bfs_distance_matrix(G):
     """
     Compute the shortest path distance matrix of an unweighted graph G using BFS.
@@ -120,7 +146,7 @@ def avg_of_distance_matrix(graph):
 
 
 
-#plot it
+# Plot the distance matrix. One should keep in mind that this is even slower than then calculation of the distance matrix.
 def plot_distance_matrix(G):
     """
     Compute and plot the shortest path distance matrix of a graph G using matplotlib.
@@ -129,7 +155,6 @@ def plot_distance_matrix(G):
     Parameters:
         G (networkx.Graph): Input graph.
     """
-    #TODO: Use the above function
     # Get the list of nodes
     nodes = list(G.nodes())
     n = len(nodes)
@@ -159,6 +184,8 @@ def plot_distance_matrix(G):
     # Show the plot
     plt.show()
 
+#If one has determined the distance matrix, one can use the following two functions. In our work, we resorted to heuristic methods in the corresponding files. 
+#However, it is still useful to keep them because they were used to produce some figures in our work.
 def average_of_distance_matrix(G):
     """
     Compute the average shortest path distance of a graph G, including the diagonal elements.
@@ -185,7 +212,7 @@ def max_in_distance_matrix(G):
     dist_matrix = distance_matrix(G)  
     return int(np.max(dist_matrix))  # Ensure the result is an integer
 
-#check if a graph is planar
+# Check if a graph is planar
 def is_planar_graph(G):
     """
     Check if a graph is planar.
@@ -199,7 +226,8 @@ def is_planar_graph(G):
     is_planar, _ = nx.check_planarity(G) # the second output is a counter example, which by default is False
     return is_planar
 
-#count self loops. In Adcocks paper they are just answering if the OG graph has loops or not. We can extend the idea and find how many loops we have. We can get the same information as before is this function returns 0
+#Count self-loops. In 1910.03969 (Adcock et al.) they are answering if the OG graph has loops or not.
+#We can extend the idea and find how many loops we have. 
 def count_self_loops(G):
     """
     Count the number of self-loops in a graph.
@@ -212,199 +240,61 @@ def count_self_loops(G):
     """
     return nx.number_of_selfloops(G)
 
-
-#count the number of circles in the graph, can be deternmined in polynomial time O(V+E), see: https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.cycles.cycle_basis.html
-def count_cycles(G):
+# From encoded graphs  to networkx.MultiGraphs
+def decode_to_net_G(bit_encoded, n, d):
     """
-    Count the number of independent cycles (cycle basis) in an undirected graph.
+    Decodes a bit-encoded representation into a NetworkX graph.
+
+    This function decodes a bit-packed representation of a graph into a 
+    NumPy array, and then constructs a multi-graph using NetworkX. The graph 
+    is represented as a MultiGraph, which allows multiple edges between nodes.
 
     Parameters:
-        G (networkx.Graph): Input undirected graph.
+    bit_encoded (str or list): The bit-encoded representation of the graph, 
+                                which is to be decoded.
+    n (int): The number of nodes in the graph.
+    d (int): The dimension of the graph or the encoding depth.
 
     Returns:
-        int: The number of independent cycles in the graph.
+    networkx.MultiGraph: A NetworkX MultiGraph object constructed from the 
+                          decoded bit-encoded data, with multiple edges allowed.
+
+    Example:
+    g = decode_to_net_G(encoded_bits, 5, 3)
     """
-    return len(nx.cycle_basis(G))
-
-#has Eulerian circle, see https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.euler.is_eulerian.html
-def has_eulerian_cycle(G):
-    """
-    Check if a graph has an Eulerian cycle.
-
-    Parameters:
-        G (networkx.Graph): Input graph.
-
-    Returns:
-        bool: True if the graph has an Eulerian cycle, False otherwise.
-    """
-    return nx.is_eulerian(G)
-
-
-def find_orbit_graph(start_graph, n, d):
-    """
-    Constructs an undirected graph where each node represents a graph state,
-    and an edge exists if one graph can be reached from another using
-    local scaling or local complementation.
-    
-    Parameters:
-    - start_graph: The starting graph state (bitpack encoded)
-    - n: Number of vertices in the graph
-    - d: Local dimension 
-    
-    Returns:
-    - G: NetworkX undirected graph representing the orbit
-    - min_graph: The minimum graph state in the orbit
-    """
-    G = nx.Graph()  
-    queue = deque([start_graph])  
-    visited = set()  # Set to track visited graphs
-    visited.add(start_graph)
-    G.add_node(start_graph)
-    min_graph = start_graph
-    
-    scaling_factors = range(2, d)  
-    complementing_factors = range(1, d)  
-
-    while queue:
-        current = queue.popleft()
-        current_matrix = bitpack_decode(current, n, d)
-        
-        # Update minimum graph
-        if current.bit_count() <= min_graph.bit_count() and current < min_graph:
-            min_graph = current
-        
-        # Try all local transformations
-        for v in range(n):
-            # Local scaling
-            for k in scaling_factors:
-                scaled_matrix = current_matrix.copy()
-                local_scaling(scaled_matrix, v, k, d)
-                encoded_scaled = bitpack_encode(scaled_matrix, d)
-                
-                # Add the scaled state as a node and create an edge
-                if encoded_scaled not in visited:
-                    visited.add(encoded_scaled)
-                    queue.append(encoded_scaled)
-                    G.add_node(encoded_scaled)
-                
-                G.add_edge(current, encoded_scaled)  # Undirected edge
-                
-                # Add a loop if it leads back to itself
-                if encoded_scaled == current:
-                    G.add_edge(current, current)
-            
-            # Local complementation
-            for k in complementing_factors:
-                complemented_matrix = current_matrix.copy()
-                local_complementation(complemented_matrix, v, k, d)
-                encoded_complemented = bitpack_encode(complemented_matrix, d)
-                
-                # Add the complemented state as a node and create an edge
-                if encoded_complemented not in visited:
-                    visited.add(encoded_complemented)
-                    queue.append(encoded_complemented)
-                    G.add_node(encoded_complemented)
-                
-                G.add_edge(current, encoded_complemented)  # Undirected edge
-                
-                # Add a loop if it leads back to itself
-                if encoded_complemented == current:
-                    G.add_edge(current, current)
-    
-    return G, min_graph
-
-
-#has Hamiltonian circle this is an NP-complete problem, we are not going to implement it, even the paper they are not including it into the correlation analysis.
-#Automorphism group is NP-hard to compute, we are not going to implement it, even the paper they are not including it into the correlation analysis.
-
-
-
-
-
-#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#Here we implement the functions to calculate the properties of the graphs that they are element of the OG
-#Schmidt measure. It is interesting because in LC-orbits paper, they are not calculating this by themselves, they just use the previous results from the optimal prep paper. 
-#The optimal paper itself seems just to provide some bounds on it and not really calculating the final result. TODO: Check the web for other implentations 
-
-
-#encoded to networkx.G
-def decode_to_net_G(bit_encoded,n,d):
-    temp = bitpack_decode(bit_encoded,n,d)
-    g = nx.from_numpy_array(temp)
+    temp = bitpack_decode(bit_encoded, n, d)
+    g = nx.from_numpy_array(temp, parallel_edges=True, create_using=nx.MultiGraph())  # Explicitly use MultiGraph
     return g
-    
-def find_red_nodes(bit_encoded,n,d):
-    temp = decode_to_net_G(bit_encoded,n,d)
+
+
+def find_red_nodes(bit_encoded, n, d):
+    """
+    Finds the minimum number of red or blue nodes in a bipartite graph 
+    represented by a bit-encoded string.
+
+    This function decodes a bit-encoded representation into a NetworkX graph 
+    and then identifies the bipartite sets (red and blue nodes). It returns 
+    the smaller of the two sets' sizes, which represents the minimum number 
+    of nodes in either set.
+
+    Parameters:
+    bit_encoded (str or list): The bit-encoded representation of the graph 
+                                to be decoded.
+    n (int): The number of nodes in the graph.
+    d (int): The dimension of the graph or the encoding depth.
+
+    Returns:
+    int: The smaller of the two sets' sizes (the red and blue sets in the 
+         bipartite graph).
+
+    Example:
+    min_red_nodes = find_red_nodes(encoded_bits, 5, 3)
+    """
+    temp = decode_to_net_G(bit_encoded, n, d)
     red_nodes, blue_nodes = nx.algorithms.bipartite.sets(temp)
     n_red_nodes = len(red_nodes)
     n_blue_nodes = len(blue_nodes)
     return min(n_red_nodes, n_blue_nodes)
-
-
-def schmidt_measure(orbit, n, d, print_nodes=False):
-    """
-    Calculate the Schmidt measure for a given orbit of encoded graphs.
-
-    This function identifies all two-colorable graphs in the given orbit,
-    determines the minimum number of red nodes for each graph, and returns
-    the minimum value among them as the Schmidt measure.
-
-    Parameters:
-    -----------
-    orbit : list of int
-        A list of integers representing encoded graphs.
-    n : int
-        The number of nodes in each graph.
-    d : int
-        The local dimension of the graph state.
-    print_nodes : bool, optional
-        If True, prints the encoding and the number of red nodes for each 
-        two-colorable graph. Default is False.
-
-    Returns:
-    --------
-    int
-        The minimum number of red nodes among the two-colorable graphs in the orbit,
-        representing the normalized Schmidt measure.
-
-    Notes:
-    ------
-    This function assumes that `decode_to_net_G` and `find_red_nodes` are defined elsewhere
-    and that the graphs are encoded such that their chromatic number can be determined.
-
-    Example:
-    --------
-    >>> orbit = [21, 42, 1365, 2709]
-    >>> schmidt_measure(orbit, 4, 3, print_nodes=True)
-    encoding: 21, has 2 red nodes
-    encoding: 42, has 1 red node
-    1
-    """
-
-    encoded_two_colorable = []
-    for i in range(len(orbit)):
-        # g = decode_to_net_G(orbit[i],n,d)
-        g = decode_to_net_G(orbit[i],n,d)
-        color = chromatic_number(g)
-        if color == 2:
-            encoded_two_colorable.append(orbit[i])
-
-    array_of_minimum_number_of_red = []        
-    # print_nodes = False
-    for i  in range(len(encoded_two_colorable)):
-        temp = find_red_nodes(encoded_two_colorable[i],n,d)
-        array_of_minimum_number_of_red.append(temp)
-        if print_nodes == True:    
-            if temp == 1:
-                print(f"encoding: {encoded_two_colorable[i]}, has {temp} red node")
-            else:
-                print(f"encoding: {encoded_two_colorable[i]}, has {temp} red nodes")
-
-    schmidt_measure_normalized = min(array_of_minimum_number_of_red)
-
-    return schmidt_measure_normalized
-
-
 
 
 def chromatic_number_and_color_counts(graph):
@@ -436,15 +326,35 @@ def chromatic_number_and_color_counts(graph):
 
 
 
+def min_chromatic_number_in_OG(orbit_graph, n, d):
+    """
+    Computes the minimum chromatic number for a set of graphs in an orbit.
 
-def min_chromatic_number_in_OG(orbit_graph,n,d):
+    This function decodes a list of encoded graphs in the orbit into NetworkX 
+    graphs, computes the chromatic number for each graph, and returns the 
+    smallest chromatic number among them.
+
+    Parameters:
+    orbit_graph (networkx.Graph): A NetworkX graph where nodes represent 
+                                  encoded graphs in the orbit.
+    n (int): The number of nodes in each graph.
+    d (int): The dimension of the graphs or the encoding depth.
+
+    Returns:
+    int: The minimum chromatic number among the decoded graphs in the orbit.
+
+    Example:
+    min_chromatic = min_chromatic_number_in_OG(orbit, 5, 3)
+    """
     encoded_graphs_in_orbit = list(orbit_graph.nodes())
     graphs_of_orbit_in_G_form = []
     for i in range(len(encoded_graphs_in_orbit)):
-        graphs_of_orbit_in_G_form.append(decode_to_net_G(encoded_graphs_in_orbit[i],n,d))
+        graphs_of_orbit_in_G_form.append(decode_to_net_G(encoded_graphs_in_orbit[i], n, d))
+    
     list_of_chromatic_number = []
     for i in range(len(graphs_of_orbit_in_G_form)):
         list_of_chromatic_number.append(chromatic_number(graphs_of_orbit_in_G_form[i]))
     
     return min(list_of_chromatic_number)
+
     

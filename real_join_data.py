@@ -1,3 +1,45 @@
+"""
+Script to compute the observables for each entanglement class.
+
+This script processes graph orbits stored as edgelist files generated from Mathematica-based enumeration.
+It computes approximate diameters using a Monte Carlo BFS sampling method and optionally evaluates additional
+graph properties such as max degree, planarity, tree structure, and more.
+
+Features:
+- Efficient approximation of graph diameter via parallel landmark-based BFS
+- Optional generation of Mathematica-readable graph input files
+- Extraction of orbit-wide properties including minimum of maximum degrees
+- Modular toggle for computing individual observables
+- Scalable to large datasets using multiprocessing
+
+Dependencies:
+- networkx
+- numpy
+- matplotlib
+- scipy
+- multiprocessing
+- Custom modules: auxilary_unparallelized, data_analysis_functions, isomorphism_method
+
+Inputs:
+- Directory structure: "orbits_d{d}_n{cnt}_separated/"
+  Each file is an edgelist corresponding to one orbit of graphs.
+
+Outputs:
+- Monte Carlo estimates: "og_data/mc_{sample_size}_og_diameters_n{n}.txt"
+- Additional observables in "og_data/", e.g., minimum max degrees per orbit
+
+Usage:
+- Adjust `n` and `d` to select the local dimension and number of particles.
+- Set relevant computation flags (e.g., `calculate_og_is_tree`) to True.
+- Make sure the input directories are structured correctly and accessible.
+
+Notes:
+- Some observables require decoding packed integer encodings of graphs.
+- Mathematica files are only generated if `produce_mathematica_files` is set.
+"""
+
+
+
 import networkx as nx
 import numpy as np
 from collections import deque, Counter
@@ -17,154 +59,10 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-
-
-
-
-#TODO: Create a new file with the pure data used and push it to github for safety.
-#TODO: Pipeline for plotting the correlation plots for each combination
-#TODO: Correlators for each of the data set.
-#TODO: Triangle plot for meaningful data
-
-
-#TODO In mathematica what is the difference between graph plot and the plotting of calculate graph
-#TODO: Check if the weights are really implemented
-#TODO: Check that I am calculcating with the correct order the elements OR put everything together
-#TODO:  Implement the mathematica files for the calculation of the 2 type of chromatic index we need.
-#TODO: Is the center of the graph physical?
-
-
-
-
-
-n=7
+n=3
 d=3
 
-# def approximate_aspl(graph, sample_size=10000):
-#     """
-#     Approximates the Average Shortest Path Length (ASPL) by sampling node pairs.
-
-#     Parameters:
-#     graph (networkx.Graph): Input graph.
-#     sample_size (int): Number of node pairs to sample.
-
-#     Returns:
-#     float: Approximate ASPL of the graph.
-#     """
-#     nodes = list(graph.nodes())
-#     total_dist = 0
-#     valid_pairs = 0
-
-#     for _ in range(sample_size):
-#         u, v = random.sample(nodes, 2)  # Randomly select two nodes
-#         try:
-#             total_dist += nx.shortest_path_length(graph, source=u, target=v)
-#             valid_pairs += 1
-#         except nx.NetworkXNoPath:
-#             continue  # Skip if no path exists
-
-#     return total_dist / valid_pairs if valid_pairs > 0 else float('inf')
-
-# def approximate_diameter(graph, sample_size=10000):
-#     """
-#     Approximates the graph diameter using Monte Carlo sampling.
-
-#     Parameters:
-#     graph (networkx.Graph): Input graph.
-#     sample_size (int): Number of node pairs to sample.
-
-#     Returns:
-#     int: Approximate diameter of the graph.
-#     """
-#     nodes = list(graph.nodes())
-#     max_distance = 0
-
-#     for _ in range(sample_size):
-#         u, v = random.sample(nodes, 2)  # Randomly select two nodes
-#         try:
-#             dist = nx.shortest_path_length(graph, source=u, target=v)
-#             max_distance = max(max_distance, dist)
-#         except nx.NetworkXNoPath:
-#             continue  # Skip if no path exists
-
-#     return max_distance
-
-# ts = time.time()
-# # Usage example
-# g = nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_2", nodetype=int)
-
-# approx_diameter_value = approximate_diameter(g,sample_size=100000)
-# print(f"Approx ASPL : {approx_diameter_value}")
-# print("Time of calc:", time.time()-ts)
-
-# ts = time.time()
-# g = nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_0", nodetype=int)
-# ex_diam = nx.diameter(g)
-# print("Exact diameter",ex_diam)
-# print("Time of calc:", time.time()-ts)
-
-
-
-
-
-
-#_______________
-# def compute_distance(u, v, graph):
-#     """
-#     Compute the shortest path length between two nodes u and v in the graph.
-#     Returns -1 if no path exists.
-#     """
-#     try:
-#         return nx.shortest_path_length(graph, source=u, target=v)
-#     except nx.NetworkXNoPath:
-#         return -1  # Return -1 if no path exists
-
-# def approximate_diameter(graph, cpus_used, sample_size=10000):
-#     """
-#     Approximates the graph diameter using Monte Carlo sampling with parallel computation.
-
-#     Parameters:
-#     graph (networkx.Graph): Input graph.
-#     sample_size (int): Number of node pairs to sample.
-
-#     Returns:
-#     int: Approximate diameter of the graph.
-#     """
-#     nodes = list(graph.nodes())
-#     max_distance = 0
-#     with multiprocessing.Pool(cpus_used) as pool:
-#         # Prepare all pairs to sample
-#         pairs = [(random.choice(nodes), random.choice(nodes)) for _ in range(sample_size)]
-
-#         # Use starmap to parallelize the computation of distances
-#         results = pool.starmap(compute_distance, [(u, v, graph) for u, v in pairs])
-
-#         # Find the maximum distance from the results
-#         max_distance = max(results)
-
-#     return max_distance
-
-# # Usage example
-# if __name__ == "__main__":
-#     ts = time.time()
-#     g = nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_0", nodetype=int)
-#     cpus_to_use = 7
-#     approx_diameter_value = approximate_diameter(g, cpus_to_use, sample_size=3000000)
-#     print(f"Approx Diameter : {approx_diameter_value}")
-#     print("Time of calc:", time.time()-ts)
-#_______________
-
-
-
-
-
-
-
-
-
-
-
-
+#START the Monte Carlo simulation for the diameter
 
 def bfs_max_distance(graph, start):
     """
@@ -224,7 +122,7 @@ def approximate_diameter(graph, cpus_used, sample_size=None):
     # Return the maximum distance as the approximate diameter
     return max(results)
 
-# Usage example
+# Usage 
 if __name__ == "__main__":
     array_diameter_mc = []
     cpus_to_use = 7
@@ -246,33 +144,119 @@ if __name__ == "__main__":
     print(array_diameter_mc)
 
 
+approx_diameter_value = approximate_diameter(g, sample_size=100000, n_jobs=2)
+print(f"Approx ASPL : {approx_diameter_value}")
+print("Time of calc:", time.time()-ts)
 
 
+#END the Monte Carlo simulation for the diameter
 
+#START: Produce mathematica files
+# We have to adapt the input of the orbit files so that we can just use it in mathematica 
+produce_mathematica_files = False
 
+if produce_mathematica_files:
+    files_for_given_orbit = os.listdir(f"orbits_d{d}_n{n}_separated")
+    for file in files_for_given_orbit:
+        #insert the encoded orbits
+        g=nx.read_edgelist(f"orbits_d{d}_n{n}_separated/{file}", nodetype=int)
+        encoded_graphs_in_orbit = list(g.nodes())
+        graphs_of_orbit_in_G_form = [bitpack_decode(encoded_graphs_in_orbit[i], n, d) for i in range(len(encoded_graphs_in_orbit))]
+        file_name =f"files_for_mathematica/graphs_in_orbits_d{d}_n{n}_separated_{file}.txt" 
+        with open(file_name, "w") as f:
+            # Loop through the list of graphs (or matrices) and write them in the desired format
+            for graph in graphs_of_orbit_in_G_form:
+                # Convert each matrix (graph) to the correct format
+                matrix_str = "{ " + ", ".join([f"{{{', '.join(map(str, row))}}}" for row in graph]) + " }"
+                f.write(matrix_str + "\n\n")
 
+#END: Produce mathematica files
 
-
-
-
-
-# approx_diameter_value = approximate_diameter(g, sample_size=100000, n_jobs=2)
-# print(f"Approx ASPL : {approx_diameter_value}")
-# print("Time of calc:", time.time()-ts)
-
-
-
-
-
+#Start the calculation of the observables and produce the files to enter in the data analysis notebook
 calculate_og_chromatic_numbers = False #Done
 calculate_og_mean_distance_matrix = False #Done (Statistically Proven the Approximation is pretty close to reality)
 calculate_og_is_planar = False #Done
 calculate_og_number_of_loops = False #Done
-calculate_og_number_of_circles = False
 calculate_og_minimum_chromatic_number_in_OG = False #Done
 less_than_10_mb = False #Done
 all_data = False #Done statistically
 calculate_og_density = False #Done
+calculate_og_is_tree = False #Done
+calculate_max_degree = False #Done
+calcualte_min_of_max_degree_in_OG = False #Done
+
+
+if calcualte_min_of_max_degree_in_OG:
+    array_min_of_max_degree_in_OG = []
+    for cnt in range(3,n+1):
+        print(f"------------------------------------Start calculating for n={cnt}------------------------------------")
+        files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
+        files_for_given_orbit.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the list based on the orbit number
+        for file in files_for_given_orbit:
+            # Load the original graph (assumed to be a standard graph with self-loops)
+            # file_path = f"orbits_d{d}_n{n}_separated/orbit_0"
+            og = nx.read_edgelist(f"orbits_d{d}_n{cnt}_separated/{file}", nodetype=int)
+            # Get a list of all node indices
+            node_indices = list(og.nodes)
+            # print("Number of nodes:", len(node_indices))
+            # print("Node indices:", node_indices)
+
+            list_of_max_degrees = []
+            for total_nodes in range(len(node_indices)):
+                # Select a specific node 
+                specific_graph = node_indices[total_nodes]
+
+                # Convert it to a MultiGraph
+                multi_graph_ex = decode_to_net_G(specific_graph, n, d)
+
+                # Compute and print the degree of nodes (accounting for multiple edges)
+                max_degree = max(dict(multi_graph_ex.degree()).values())
+                # print("max degree:",max_degree)
+                list_of_max_degrees.append(max_degree)
+                # draw_graph(specific_graph,n,d)
+
+            min_of_max_degrees = min(list_of_max_degrees)
+            array_min_of_max_degree_in_OG.append(min_of_max_degrees)
+
+            print(f"min of max degree for {file}: {min_of_max_degrees}")
+    with open("og_data/join_min_of_max_degree_in_OG.txt", "w") as f:
+        f.write(str(array_min_of_max_degree_in_OG))
+
+
+
+
+if calculate_max_degree:
+    array_og_max_degree = []
+    for cnt in range(3,n+1):
+        print(f"------------------------------------Start calculating for n={cnt}------------------------------------")
+        files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
+        files_for_given_orbit.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the list based on the orbit number
+        for file in files_for_given_orbit:
+            g=nx.read_edgelist(f"orbits_d{d}_n{cnt}_separated/{file}", nodetype=int)
+            temp = max_degree(g)
+            array_og_max_degree.append(temp)
+            print(f"OG max for {file}: {temp}")
+    with open("og_data/join_og_max_degre.txt", "w") as f:
+        f.write(str(array_og_max_degree))
+
+if calculate_og_is_tree:
+    array_og_is_tree = []
+    for cnt in range(3,n+1):
+        print(f"------------------------------------Start calculating for n={cnt}------------------------------------")
+        files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
+        files_for_given_orbit.sort(key=lambda x: int(x.split('_')[-1]))  # Sort the list based on the orbit number
+        for file in files_for_given_orbit:
+            g=nx.read_edgelist(f"orbits_d{d}_n{cnt}_separated/{file}", nodetype=int)
+            temp = is_tree(g)
+            array_og_is_tree.append(temp)
+            print(f"OG is tree for {file} found")
+    with open("og_data/join_og_is_tree.txt", "w") as f:
+        f.write(str(array_og_is_tree))
+    
+    
+
+
+
 
 if calculate_og_chromatic_numbers and calculate_og_is_planar and calculate_og_number_of_loops and calculate_og_minimum_chromatic_number_in_OG and calculate_og_density:
     array_og_chromatic_number = []
@@ -344,7 +328,19 @@ if calculate_og_mean_distance_matrix and less_than_10_mb:
     with open("og_data/join_og_mean_path_length.txt", "w") as f:
         f.write(str(array_og_mean_distance_matrix))
         
-        
+if calculate_og_mean_distance_matrix and all_data:
+    array_og_mean_distance_matrix = []
+    array_not_cal_og_mean_distance_matrix = []
+    for cnt in range(3,n+1):
+        files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
+        for file in files_for_given_orbit:
+            print(f"n = {cnt} and {file}")
+            g=nx.read_edgelist(f"orbits_d{d}_n{cnt}_separated/{file}", nodetype=int)
+            og_mean_distance_matrix = avg_of_distance_matrix(g)
+            print(f"avg of distance matrix: {og_mean_distance_matrix}")
+            array_og_mean_distance_matrix.append(og_mean_distance_matrix)
+    with open(f"og_data/new_og_mean_distance_matrix_d{d}_n{n}.txt", "w") as f:
+        f.write(str(array_og_mean_distance_matrix))
   
 
                 

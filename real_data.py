@@ -17,7 +17,7 @@ import time
 
 
 #TODO In mathematica what is the difference between graph plot and the plotting of calculate graph
-n=7
+n=3
 d=3
 
 # # This will be used for the general 
@@ -68,35 +68,35 @@ def bfs_og_mean_path_length(v,g):
     return temp_sum
 
 
-
-# Read the graph
-g = nx.read_edgelist(f"qudit-lc/orbits_d{d}_n{n}_separated/orbit_0", nodetype=int)
-
-# ts_new = time.time()
-# print("netwrokx avg:",avg_of_distance_matrix(g))    
-# print("networkx:", time.time()-ts_new)    
-if __name__== "__main__":
-    multiprocessing.freeze_support()
-    sorted_nodes = sorted(g.nodes)
-    relabel_dict = {node: i for i, node in enumerate(sorted_nodes)}
-    g = nx.relabel_nodes(g,relabel_dict)
-    total_sum=0
-    ts = time.time()
-    print("number of nodes:",len(g.nodes))
-    num_workers = multiprocessing.cpu_count()
-    nodes=list(g.nodes)
-    print(num_workers)
-    with multiprocessing.Pool(num_workers) as pool:
-        while nodes:
-            print(time.time()-ts)
-            batch_size = min(len(nodes),num_workers)
-            batch = [nodes.pop(0) for _ in range(batch_size)]
-            res_bfs = pool.starmap(bfs_og_mean_path_length,[(v,g) for v in batch])
-            total_sum+=sum(res_bfs)
-    N=len(g.nodes)
-    mean_distance=total_sum/(N*(N-1))
-    print("mean distance:",mean_distance)
-    print("bfs time", time.time()-ts)       
+parallel_bfs_og_mean_dist = False
+if parallel_bfs_og_mean_dist:
+    # Read the graph
+    g = nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_0", nodetype=int)
+    # ts_new = time.time()
+    # print("netwrokx avg:",avg_of_distance_matrix(g))    
+    # print("networkx:", time.time()-ts_new)    
+    if __name__== "__main__":
+        multiprocessing.freeze_support()
+        sorted_nodes = sorted(g.nodes)
+        relabel_dict = {node: i for i, node in enumerate(sorted_nodes)}
+        g = nx.relabel_nodes(g,relabel_dict)
+        total_sum=0
+        ts = time.time()
+        print("number of nodes:",len(g.nodes))
+        num_workers = multiprocessing.cpu_count()
+        nodes=list(g.nodes)
+        print(num_workers)
+        with multiprocessing.Pool(num_workers) as pool:
+            while nodes:
+                print(time.time()-ts)
+                batch_size = min(len(nodes),num_workers)
+                batch = [nodes.pop(0) for _ in range(batch_size)]
+                res_bfs = pool.starmap(bfs_og_mean_path_length,[(v,g) for v in batch])
+                total_sum+=sum(res_bfs)
+        N=len(g.nodes)
+        mean_distance=total_sum/(N*(N-1))
+        print("mean distance:",mean_distance)
+        print("bfs time", time.time()-ts)       
     
 
 
@@ -119,8 +119,6 @@ if __name__== "__main__":
 
 # #TODO: Check if the weights are really implemented
 # #TODO Check if the functions bellow really work for weighted graphs. Check the results with mathematica also.
-#TODO max in distance matrix
-#TODO: Check that I am calculcating with the correct order the elements OR put everything together
 
 
 
@@ -158,49 +156,6 @@ def calculate_og_mean_path_length(filename,count):
     else:
         print(f"For n = {count} and {filename} mean distance not calculated")
         return str(filename)
-
-# if __name__== "__main__":
-#     multiprocessing.freeze_support()
-#     if calculate_og_mean_distance_matrix and less_than_10_mb:
-#         array_og_mean_distance_matrix = []
-#         array_not_cal_og_mean_distance_matrix = []
-#         num_workers = multiprocessing.cpu_count()
-#         for cnt in range(3,n+1):
-#             files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
-#             with multiprocessing.Pool(num_workers) as pool:
-#                 batch_size = min(len(files_for_given_orbit),num_workers)
-#                 batch = [files_for_given_orbit.pop(0) for _ in range(batch_size)]
-#                 res_mean_path_length = pool.starmap(calculate_og_mean_path_length,[(filename,cnt) for filename in batch])
-#                 array_og_mean_distance_matrix.extend(res_mean_path_length) 
-#         with open("og_data/less_than_10_mb_og_mean_distance_matrix_d{d}_n{n}.txt", "w") as f:
-#             f.write(str(array_og_mean_distance_matrix))
-
-# if calculate_og_mean_distance_matrix and less_than_10_mb:
-#     array_og_mean_distance_matrix = []
-#     array_not_cal_og_mean_distance_matrix = []
-#     def process_file(file, cnt):
-#         file_path = f"orbits_d{d}_n{cnt}_separated/{file}"
-#         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-#         if file_size_mb <= 10 :
-#             print(f"n = {cnt} and {file}")
-#             g=nx.read_edgelist(file_path, nodetype=int)
-#             og_mean_distance_matrix = avg_of_distance_matrix(g)
-#             return og_mean_distance_matrix
-#         else:
-#             print(f"For n = {cnt} and {file} mean distance not calculated")
-#             return None
-
-#     for cnt in range(3,n+1):
-#         files_for_given_orbit = os.listdir(f"orbits_d{d}_n{cnt}_separated")
-#         with concurrent.futures.ThreadPoolExecutor() as executor:
-#             results = list(executor.map(lambda file: process_file(file, cnt), files_for_given_orbit))
-#             array_og_mean_distance_matrix.extend([result for result in results if result is not None])
-#             array_not_cal_og_mean_distance_matrix.extend([file for file, result in zip(files_for_given_orbit, results) if result is None])
-
-#     with open(f"og_data/less_than_10_mb_og_mean_distance_matrix_d{d}_n{n}.txt", "w") as f:
-#         f.write(str(array_og_mean_distance_matrix))
-
-
         
         
 if calculate_og_mean_distance_matrix and all_data:
