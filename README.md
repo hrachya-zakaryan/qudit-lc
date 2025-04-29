@@ -1,4 +1,4 @@
-#qudit-lc
+# qudit-lc
 
 A complete framework for calculating the Local Clifford (LC) entanglement classes for qutrit graph states up to 7 particles the necessary observables extraction and the corresponding data analysis.
 
