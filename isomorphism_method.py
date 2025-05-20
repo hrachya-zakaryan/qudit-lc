@@ -11,6 +11,7 @@ import matplotlib.lines as mlines
 import sympy as sp
 from itertools import combinations
 import shutil
+import matplotlib.colors as mcolors
 
 def total_weight(graph):
     bit_length=int(graph).bit_length()
@@ -141,7 +142,7 @@ def separate_orbits(G):
 def find_representatives(n,d):
     represenatives=[]
     for i in range(3,n+1):
-        directory=f"orbits_d{d}_n{i}_separated"
+        directory=f"orbits_d{d}_n{i}_separated_sorted"
         for j in range(len(os.listdir(directory))):
             file_path=os.path.join(directory,f"orbit_{j}")
             G=nx.read_edgelist(file_path,data=False)
@@ -165,7 +166,7 @@ def draw_subgraph_inside_circle(ax, center, radius, adjacency_matrix):
     edge_weights = {(u, v): int(adjacency_matrix[u, v]) for u, v in edges if adjacency_matrix[u, v] > 0}
 
     # Set edge colors based on the weight
-    edge_colors = ['green' if adjacency_matrix[u, v] == 1 else 'red' if adjacency_matrix[u, v] == 2 else 'blue' if adjacency_matrix[u, v] == 3 else 'black' for u, v in edges]
+    edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
 
     # Draw subgraph edges with the appropriate color
     nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=1.3)
@@ -176,29 +177,24 @@ def draw_subgraph_inside_circle(ax, center, radius, adjacency_matrix):
     # Draw edge weights (small font)
     #nx.draw_networkx_edge_labels(subG, pos, edge_labels=edge_weights, ax=ax, font_size=4, font_color='black')
 
-def plot_graph(G, n, d):
+def plot_graph(G, n, d, seed, orbit):
     """
     Plot a graph G using NetworkX with each node as a circle containing a small graph.
+    This version draws into an existing matplotlib Axes (ax).
     """
     fig, ax = plt.subplots(figsize=(12, 10))
+    pos = nx.spring_layout(G, seed=seed, k=1/np.sqrt(len(G.nodes)))  # Layout for main graph
 
-    pos = nx.spring_layout(G, seed=37, k=1/np.sqrt(len(G.nodes)))  # Layout for main graph
-
-    # Draw main graph edges (light blue)
+    # Draw main graph edges
     nx.draw_networkx_edges(G, pos, ax=ax, edge_color='blue', alpha=0.7, width=0.8)
 
-    # Draw main graph nodes as circles
+    # Draw main graph nodes as circles with subgraphs inside
     for node in G.nodes():
-        x, y = pos[node]  # Get node position
-        
-        # Draw a large circle for the node (white fill, black border)
+        x, y = pos[node]
         circle = plt.Circle((x, y), 0.1, color='white', ec='black', lw=1.2)
         ax.add_patch(circle)
-        
-        # Get adjacency matrix for the subgraph
+
         adjacency_matrix = bitpack_decode(int(node), n, d)
-        
-        # Draw the subgraph inside the node circle
         draw_subgraph_inside_circle(ax, (x, y), 0.08, adjacency_matrix)
 
     # Set axis limits and aspect ratio
@@ -207,16 +203,15 @@ def plot_graph(G, n, d):
     ax.set_aspect('equal')
     ax.axis('off')
 
-    # Create a legend for subgraph edge colors
+    # Legend (optional to skip in each subplot if too cluttered)
     legend_elements = [
-        mlines.Line2D([], [], color='green', lw=1.3, label='Edge Weight = 1'),
-        mlines.Line2D([], [], color='red', lw=1.3, label='Edge Weight = 2'),
-        mlines.Line2D([], [], color='blue', lw=1.3, label='Edge Weight = 3'),
-        mlines.Line2D([], [], color='black', lw=1.3, label='Edge Weight = 4')
+        mlines.Line2D([], [], color='black', lw=1.3, label='Edge Weight = 1'),
+        mlines.Line2D([], [], color='red', lw=1.3, label='Edge Weight = 2')
     ]
-    
-    ax.legend(handles=legend_elements, loc='upper right', fontsize=10, frameon=True)
-    plt.show()
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=7, frameon=True)
+    plt.tight_layout()
+    plt.savefig(f"n{n}d{d}_o{orbit}_s{seed}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
 def call_measure(n,d,directory,i,strategy):
     """
@@ -311,7 +306,7 @@ def all_bipartitions_measure(adj_matrix,n,d):
 
 def orbit_schmidt_measure(n,d, strategy):
     
-    directory=f"orbits_d{d}_n{n}_separated"
+    directory=f"orbits_d{d}_n{n}_separated_sorted"
     num_orbits=len(list(os.listdir(directory)))
     schmidt_measures=[]
     num_workers = multiprocessing.cpu_count()
@@ -439,7 +434,7 @@ def rank_over_finite_field(matrix, d):
     return len(pivot_cols)
 
 
-def orbit_value(n,d,orbit,directory):
+def orbit_value(orbit,directory):
     nodes=nx.read_edgelist(os.path.join(directory,orbit)).nodes
     rep=int(min(nodes,key=lambda x: (int(x).bit_count(), total_weight(int(x)),x)))
     return (int(rep).bit_count(), total_weight(int(rep)),int(rep))
@@ -448,7 +443,7 @@ def orbit_value(n,d,orbit,directory):
 def sort_orbits(d):
     for n in range(3,8):
         directory=f"orbits_d{d}_n{n}_separated"
-        sorted_orbits=sorted(os.listdir(directory),key= lambda o: orbit_value(n,d,o,directory))
+        sorted_orbits=sorted(os.listdir(directory),key= lambda o: orbit_value(o,directory))
         new_directory=f"orbits_d{d}_n{n}_separated_sorted"
         os.makedirs(new_directory, exist_ok=False)
         for new_index, original_filename in enumerate(sorted_orbits):
@@ -456,21 +451,88 @@ def sort_orbits(d):
             dst_filename = f'orbit_{new_index}'
             dst_path = os.path.join(new_directory, dst_filename)
             shutil.copy2(src_path, dst_path)  # copy2 preserves metadata
-# n=7
-# d=3
-for n in range(3,8):
-    directory=f"orbits_d3_n{n}_separated_sorted"
-    orbits=sorted(os.listdir(directory),key=lambda x: int(x.split('_')[-1]))
-    print("-"*8+str(n)+"-"*8)
-    for o in orbits:
-        print(orbit_value(n,3,o,directory))
-        
+
+
+def plot_distance_matrix(G,filename):
+    """
+    Compute and plot the shortest path distance matrix of a graph G using matplotlib.
+    The matrix contains only integer distances.
+
+    Parameters:
+        G (networkx.Graph): Input graph.
+    """
+    # Get the list of nodes
+    nodes = sorted(list(G.nodes()),key=lambda x: (int(x).bit_count(), total_weight(int(x)),int(x)))
+    n = len(nodes)
+    
+    edge_changes=[]
+    temp_edges=0
+    for i in range(n):
+        if temp_edges<int(nodes[i]).bit_count():
+            edge_changes.append((i,int(nodes[i]).bit_count()))
+        temp_edges=int(nodes[i]).bit_count()
+    # Initialize an empty distance matrix
+    dist_matrix = np.zeros((n, n), dtype=int)
+    
+    # Compute the shortest path lengths
+    for i, node_i in enumerate(nodes):
+        lengths = nx.shortest_path_length(G, source=node_i)
+        for j, node_j in enumerate(nodes):
+            if node_j in lengths:
+                dist_matrix[i, j] = int(lengths[node_j])  # Ensure integers
+            else:
+                dist_matrix[i, j] = np.inf  # Use infinity for unreachable nodes
+
+    # Plot the matrix using imshow
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    cmap = plt.cm.PuBuGn  # define the colormap
+    # extract all colors from the .jet map
+    cmaplist = [cmap(i) for i in range(cmap.N)]
+    
+    cmap=mcolors.LinearSegmentedColormap.from_list('Custom cmap', cmaplist, cmap.N)
+    bounds = np.arange(0, np.max(dist_matrix)+2)
+    norm = mcolors.BoundaryNorm(bounds, cmap.N)
+
+    cax = ax.imshow(dist_matrix, cmap=cmap, interpolation="nearest",norm=norm)
+    cbar = fig.colorbar(cax, label="Shortest Path Distance")
+    cbar.set_ticks(np.arange(0.5, np.max(dist_matrix)+1, 1),labels=np.arange(0, np.max(dist_matrix)+1, 1))
+    cbar.ax.tick_params(which='both', length=0)
+    ax.set_title("Distance Matrix")
+    ax.set_xlabel("Number of Edges in the Graph")
+    ax.set_ylabel("Encoded Graph")
+    ax.set_xticks([])
+    yticks = list(zip(*edge_changes))[0]
+    ax.set_yticks([tick - 0.5 for tick in yticks])
+    ylabels=[]
+    for i in yticks:
+        ylabels.append(int(nodes[i]))
+    #ax.set_xticklabels(nodes, rotation=90)
+    ax.set_yticklabels(ylabels)
+    for idx in range(1,len(edge_changes)):
+            ax.axhline(y=edge_changes[idx][0]-0.5, color='black', linestyle='solid', linewidth=1)
+            ax.axvline(x=edge_changes[idx][0]-0.5, color='black', linestyle='solid', linewidth=1)
+    xticks=[]
+    for idx in range(len(edge_changes)-1):
+            xticks.append((edge_changes[idx+1][0] + edge_changes[idx][0]) / 2-0.5)
+    xticks.append((len(nodes) + edge_changes[-1][0]) / 2-0.5)
+    ax.set_xticks(xticks, labels=list(zip(*edge_changes))[1])
+    ax.tick_params(axis='x', which='both', length=0)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300)
+
+n=7
+d=3
+n=4
+g= nx.read_edgelist(f"orbits_d{d}_n{n}_separated_sorted/orbit_2", data=False)
+plot_distance_matrix(g,'n4o2.png')
+#plot_graph(g, n, d, 49, 2)
+
 #directory=f"orbits_d{d}_n{n}_separated"
 #call_measure(n,d,directory,46,'independent_set')
 #print(orbit_schmidt_measure(n,d,'independent_set'))
-#r=find_representatives(n,d)
-# r=[[5, (3, 0)], [21, (4, 0)], [81, (4, 1)], [344, (4, 2)], [20816, (5, 0)], [1368, (5, 1)], [1348, (5, 2)], [337, (5, 3)], [85, (5, 4)], [279888, (6, 0)], [344452, (6, 1)], [278789, (6, 2)], [1361, (6, 3)], [1335569, (6, 4)], [1380736, (6, 5)], [18433360, (6, 6)], [1380672, (6, 7)], [21316944, (6, 8)], [279824, (6, 9)], [5444, (6, 10)], [21784, (6, 11)], [345488, (6, 12)], [279826, (6, 13)], [341, (6, 14)], [5464, (6, 15)], [21780, (6, 16)], [279814, (6, 17)], [279813, (6, 18)], [5441, (6, 19)], [1401232, (6, 20)], [1146160384, (7, 0)], [21251136, (7, 1)], [4265217, (7, 2)], [1141904656, (7, 3)], [1163150656, (7, 4)], [5453714704, (7, 5)], [4265232, (7, 6)], [1146230080, (7, 7)], [1146160640, (7, 8)], [1146160416, (7, 9)], [22299968, (7, 10)], [5470491920, (7, 11)], [22300224, (7, 12)], [1167345984, (7, 13)], [1146423620, (7, 14)], [89212192, (7, 15)], [1145439297, (7, 16)], [1146177856, (7, 17)], [21251392, (7, 18)], [1146119488, (7, 19)], [4527184, (7, 20)], [21251137, (7, 21)], [21251168, (7, 22)], [21251169, (7, 23)], [22287968, (7, 24)], [4527488, (7, 25)], [25510992, (7, 26)], [21251456, (7, 27)], [21333252, (7, 28)], [1145373716, (7, 29)], [4527504, (7, 30)], [5470492752, (7, 31)], [1141921088, (7, 32)], [1099240784, (7, 33)], [1141920840, (7, 34)], [87300, (7, 35)], [1146423616, (7, 36)], [5655258688, (7, 37)], [1099240528, (7, 38)], [1146115392, (7, 39)], [4265234, (7, 40)], [1145378324, (7, 41)], [1145373720, (7, 42)], [1145382144, (7, 43)], [5655238032, (7, 44)], [21251138, (7, 45)], [1145378128, (7, 46)], [89212176, (7, 47)], [21333392, (7, 48)], [1365, (7, 49)], [4527172, (7, 50)], [4265296, (7, 51)], [21333248, (7, 52)], [21071121, (7, 53)], [21828, (7, 54)], [21825, (7, 55)], [4523076, (7, 56)], [21848, (7, 57)], [4523396, (7, 58)], [22283872, (7, 59)], [21251090, (7, 60)], [4265221, (7, 61)], [4265222, (7, 62)], [4261125, (7, 63)], [4527176, (7, 64)], [21251089, (7, 65)], [21071105, (7, 66)], [21251094, (7, 67)], [5457, (7, 68)], [349272, (7, 69)], [87316, (7, 70)], [87320, (7, 71)], [21251088, (7, 72)]]
-# draw_representatives(r,d,8)
+# r=find_representatives(n,d)
+# print(r)
 # generate_graphs_c(n,d,"c/generate_graphs")
 # g=orbit_atlas_c("c/complement",n,d)
 # if __name__ == "__main__":
@@ -488,26 +550,6 @@ for n in range(3,8):
 # for i in range(len(orbits)):
 #     nx.write_edgelist(orbits[i],f"{directory}/orbit_{i}", data=False)
 
-# # generate_graphs_c(n,d,"c/generate_graphs")
-# # g=orbit_atlas_c("c/complement",n,d)
-# if __name__ == "__main__":
-#     multiprocessing.freeze_support()
-#     # print(orbit_schmidt_measure(n,d,'independent_set'))
-#     sm_in_og = []
-#     for cnt in range(3,n+1):
-#         print(f"------------------------------------Start calculating for n={cnt}------------------------------------")
-#         sm_in_og.append(orbit_schmidt_measure(cnt,d,'independent_set'))
-    
-    
-#     with open("og_data/join_sm_in_og.txt", "w") as f:
-#         f.write(str(sm_in_og))
-#     # g=orbit_atlas_c(n,d)
-# # g=nx.read_edgelist(f"orbits_d{d}_n{n}_separated/orbit_6", data=False)
-# print("Vertices:",g.number_of_nodes())
-# print("Edges:", g.number_of_edges())
-# encoded_value=bitpack_encode(nx.to_numpy_array(nx.from_graph6_bytes("EU~w".encode()),dtype=int),d)
-# call_generate_graphs(n,d, encoded_value,"c/generate_graphs",96,time.time())
-# orbits=separate_orbits(g)
 
 # directory = f"orbits_d{d}_n{n}_separated"
 # os.makedirs(directory, exist_ok=True)

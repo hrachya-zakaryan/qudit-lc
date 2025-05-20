@@ -1,9 +1,10 @@
 import numpy as np
-from itertools import product, combinations
+import itertools
 import networkx as nx
 import matplotlib.pyplot as plt
 
-
+from networkx.drawing.nx_agraph import graphviz_layout
+import pygraphviz as pgv
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -50,6 +51,47 @@ def draw_graphs(encoded_graphs, n, d, cols=3):
     plt.tight_layout()
     plt.show()
 
+
+layout_engines = ['dot', 'neato', 'circo', 'fdp', 'sfdp', 'twopi']
+
+def edge_crossings(pos, edges):
+    crossings = 0
+    for i in range(len(edges)):
+        for j in range(i + 1, len(edges)):
+            (u1, v1), (u2, v2) = edges[i], edges[j]
+            if len({u1, v1, u2, v2}) < 4:
+                continue  # skip if edges share a node
+            a, b = pos[u1], pos[v1]
+            c, d = pos[u2], pos[v2]
+            if lines_intersect(a, b, c, d):
+                crossings += 1
+    return crossings
+
+def lines_intersect(p1, p2, q1, q2):
+    def ccw(a, b, c):
+        return (c[1]-a[1]) * (b[0]-a[0]) > (b[1]-a[1]) * (c[0]-a[0])
+    return ccw(p1, q1, q2) != ccw(p2, q1, q2) and ccw(p1, p2, q1) != ccw(p1, p2, q2)
+
+def layout_score(pos, graph):
+    crossings = edge_crossings(pos, list(graph.edges()))
+    spread = np.var([p[0] for p in pos.values()] + [p[1] for p in pos.values()])
+    return crossings * 10 - spread  # fewer crossings and more spread = better
+
+def best_layout(graph):
+    best_pos = None
+    best_score = float('inf')
+    for engine in layout_engines:
+        try:
+            pos = graphviz_layout(graph, prog=engine)
+            score = layout_score(pos, graph)
+            if score < best_score:
+                best_score = score
+                best_pos = pos
+        except:
+            continue
+    return best_pos if best_pos else nx.spring_layout(graph)
+
+
 def circular_subgraph_layout(n, center, radius):
     """ Arrange n points in a circular layout inside a given center and radius. """
     angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
@@ -65,12 +107,10 @@ def draw_representatives(encoded_graphs, d, cols=3):
         d (int): Modulo value for weights (used for decoding).
         cols (int): Number of columns in the subplot grid (default: 3).
     """
-    center=(1,0)
-    radius=0.01
     num_graphs = len(encoded_graphs)
     rows = (num_graphs + cols - 1) // cols  # Compute number of rows needed
 
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4))  # Create subplots
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1, rows * 1))  # Create subplots
     axes = axes.flatten() if num_graphs > 1 else [axes]  # Flatten axes for easy iteration
 
     for i, encoded_graph in enumerate(encoded_graphs):
@@ -79,7 +119,7 @@ def draw_representatives(encoded_graphs, d, cols=3):
         adjacency_matrix = bitpack_decode(encoded_graph[0], n, d)
         
         subG = nx.from_numpy_array(adjacency_matrix)  # Convert adjacency matrix to NetworkX graph
-        pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)  # Keep subgraph size, shrink nodes
+        #pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)  # Keep subgraph size, shrink nodes
 
         # Get weighted edges
         edges = [(u, v) for u, v in subG.edges()]
@@ -87,8 +127,10 @@ def draw_representatives(encoded_graphs, d, cols=3):
         # Set edge colors based on the weight
         edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
         
-        pos = nx.nx_agraph.graphviz_layout(subG, prog='circo')
-        
+        #pos = nx.nx_agraph.graphviz_layout(subG, prog='circo')
+        #pos = nx.circular_layout(subG)
+        node_order, min_cross = best_permutation(subG)
+        pos = circular_positions(node_order)
         # Draw subgraph edges with the appropriate color
         nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=2)
         
@@ -97,14 +139,57 @@ def draw_representatives(encoded_graphs, d, cols=3):
         
         ax.set_title(f"Graph {i+1}")
         ax.axis("off")  # Hide axis
+        ax.set_aspect('equal')
 
     # Hide any unused subplot axes
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig("Representatives.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
+
+def circular_positions(nodes):
+    """Assign fixed circular positions to nodes."""
+    n = len(nodes)
+    angle_step = 2 * np.pi / n
+    return {node: (np.cos(i * angle_step), np.sin(i * angle_step)) for i, node in enumerate(nodes)}
+
+def count_crossings(G, pos):
+    """Count the number of edge crossings."""
+    crossings = 0
+    edges = list(G.edges())
+
+    def ccw(a, b, c):
+        return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
+
+    def intersect(e1, e2):
+        a, b = pos[e1[0]], pos[e1[1]]
+        c, d = pos[e2[0]], pos[e2[1]]
+        return ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
+
+    for i in range(len(edges)):
+        for j in range(i + 1, len(edges)):
+            if len(set(edges[i]) & set(edges[j])) == 0:  # disjoint edges only
+                if intersect(edges[i], edges[j]):
+                    crossings += 1
+    return crossings
+
+def best_permutation(G):
+    """Find permutation with minimal crossings."""
+    nodes = list(G.nodes())
+    min_crossings = float('inf')
+    best_order = nodes
+
+    for perm in itertools.permutations(nodes):
+        pos = circular_positions(perm)
+        crossings = count_crossings(G, pos)
+        if crossings < min_crossings:
+            min_crossings = crossings
+            best_order = perm
+
+    return best_order, min_crossings
 
 def draw_graph(encoded_graph, n, d):
     """
