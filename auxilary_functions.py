@@ -2,27 +2,80 @@ import numpy as np
 import itertools
 import networkx as nx
 import matplotlib.pyplot as plt
-
+import matplotlib.lines as mlines
 from networkx.drawing.nx_agraph import graphviz_layout
 import pygraphviz as pgv
 import networkx as nx
 import matplotlib.pyplot as plt
+
+
+def circular_subgraph_layout(n, center, radius):
+    """ Arrange n points in a circular layout inside a given center and radius. """
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    return {i: center + radius * np.array([np.cos(angle), np.sin(angle)]) for i, angle in enumerate(angles)}
+
+def draw_subgraph_inside_circle(ax, center, radius, adjacency_matrix):
+    """ Draws a small subgraph inside a circular boundary. """
+    subG = nx.from_numpy_array(adjacency_matrix) 
+    pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)
+    edges = [(u, v) for u, v in subG.edges()]
+    edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
+    nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=1.3)
+    nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=23, node_color='blue', edgecolors='black', linewidths=0.6)
+
+
+def plot_graph(G, n, d, seed, orbit):
+    """
+    Plot a graph G using NetworkX with each node as a circle containing a graph.
+
+    Args:
+        G(nx.Graph): Graph in networkx form
+        n(int): Number of vertices
+        d(int): Local dimension
+        seed(int): Seed for the spring_layout
+        orbit(int): Orbit number 
+    """
+    fig, ax = plt.subplots(figsize=(12, 10))
+    pos = nx.spring_layout(G, seed=seed, k=1/np.sqrt(len(G.nodes)))
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='blue', alpha=0.7, width=0.8)
+    for node in G.nodes():
+        x, y = pos[node]
+        circle = plt.Circle((x, y), 0.1, color='white', ec='black', lw=1.2)
+        ax.add_patch(circle)
+        adjacency_matrix = bitpack_decode(int(node), n, d)
+        draw_subgraph_inside_circle(ax, (x, y), 0.08, adjacency_matrix)
+
+    ax.set_xlim(min(x for x, y in pos.values()) - 0.2, max(x for x, y in pos.values()) + 0.2)
+    ax.set_ylim(min(y for x, y in pos.values()) - 0.2, max(y for x, y in pos.values()) + 0.2)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    legend_elements = [
+        mlines.Line2D([], [], color='black', lw=1.3, label='Edge Weight = 1'),
+        mlines.Line2D([], [], color='red', lw=1.3, label='Edge Weight = 2')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=7, frameon=True)
+    plt.tight_layout()
+    plt.savefig(f"n{n}d{d}_o{orbit}_s{seed}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
 
 def draw_graphs(encoded_graphs, n, d, cols=3):
     """
     Draws multiple graphs given their bit encoding.
 
     Parameters:
-        encoded_graphs (list of int): A list of bit-encoded graphs.
+        encoded_graphs (list[int]): A list of bit-encoded graphs.
         n (int): Number of vertices in the graphs.
         d (int): Modulo value for weights (used for decoding).
         cols (int): Number of columns in the subplot grid (default: 3).
     """
-    num_graphs = len(encoded_graphs)
-    rows = (num_graphs + cols - 1) // cols  # Compute number of rows needed
 
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4))  # Create subplots
-    axes = axes.flatten() if num_graphs > 1 else [axes]  # Flatten axes for easy iteration
+    num_graphs = len(encoded_graphs)
+    rows = (num_graphs + cols - 1) // cols
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 4)) 
+    axes = axes.flatten() if num_graphs > 1 else [axes]
 
     for i, encoded_graph in enumerate(encoded_graphs):
         ax = axes[i]
@@ -42,106 +95,55 @@ def draw_graphs(encoded_graphs, n, d, cols=3):
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax)
         
         ax.set_title(f"Graph {i+1}")
-        ax.axis("off")  # Hide axis
+        ax.axis("off") 
 
-    # Hide any unused subplot axes
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
     plt.tight_layout()
     plt.show()
 
-
-layout_engines = ['dot', 'neato', 'circo', 'fdp', 'sfdp', 'twopi']
-
-def edge_crossings(pos, edges):
-    crossings = 0
-    for i in range(len(edges)):
-        for j in range(i + 1, len(edges)):
-            (u1, v1), (u2, v2) = edges[i], edges[j]
-            if len({u1, v1, u2, v2}) < 4:
-                continue  # skip if edges share a node
-            a, b = pos[u1], pos[v1]
-            c, d = pos[u2], pos[v2]
-            if lines_intersect(a, b, c, d):
-                crossings += 1
-    return crossings
-
-def lines_intersect(p1, p2, q1, q2):
-    def ccw(a, b, c):
-        return (c[1]-a[1]) * (b[0]-a[0]) > (b[1]-a[1]) * (c[0]-a[0])
-    return ccw(p1, q1, q2) != ccw(p2, q1, q2) and ccw(p1, p2, q1) != ccw(p1, p2, q2)
-
-def layout_score(pos, graph):
-    crossings = edge_crossings(pos, list(graph.edges()))
-    spread = np.var([p[0] for p in pos.values()] + [p[1] for p in pos.values()])
-    return crossings * 10 - spread  # fewer crossings and more spread = better
-
-def best_layout(graph):
-    best_pos = None
-    best_score = float('inf')
-    for engine in layout_engines:
-        try:
-            pos = graphviz_layout(graph, prog=engine)
-            score = layout_score(pos, graph)
-            if score < best_score:
-                best_score = score
-                best_pos = pos
-        except:
-            continue
-    return best_pos if best_pos else nx.spring_layout(graph)
-
-
-def circular_subgraph_layout(n, center, radius):
-    """ Arrange n points in a circular layout inside a given center and radius. """
-    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
-    return {i: center + radius * np.array([np.cos(angle), np.sin(angle)]) for i, angle in enumerate(angles)}
-
 def draw_representatives(encoded_graphs, d, cols=3):
     """
-    Draws multiple graphs given their bit encoding.
+    Draws the representatives of the orbits.
 
     Parameters:
-        encoded_graphs (list of int): A list of bit-encoded graphs.
-        n (int): Number of vertices in the graphs.
-        d (int): Modulo value for weights (used for decoding).
+        encoded_graphs (list[int]): A list of bit-encoded graphs.
+        d (int): Local dimension.
         cols (int): Number of columns in the subplot grid (default: 3).
     """
-    num_graphs = len(encoded_graphs)
-    rows = (num_graphs + cols - 1) // cols  # Compute number of rows needed
 
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1, rows * 1))  # Create subplots
-    axes = axes.flatten() if num_graphs > 1 else [axes]  # Flatten axes for easy iteration
+    num_graphs = len(encoded_graphs)
+    rows = (num_graphs + cols - 1) // cols
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1, rows * 1)) 
+    axes = axes.flatten() if num_graphs > 1 else [axes]
 
     for i, encoded_graph in enumerate(encoded_graphs):
         ax = axes[i]
         n=encoded_graph[1][0]
         adjacency_matrix = bitpack_decode(encoded_graph[0], n, d)
         
-        subG = nx.from_numpy_array(adjacency_matrix)  # Convert adjacency matrix to NetworkX graph
-        #pos = circular_subgraph_layout(len(subG.nodes), np.array(center), radius * 0.7)  # Keep subgraph size, shrink nodes
-
-        # Get weighted edges
+        subG = nx.from_numpy_array(adjacency_matrix)
+        
         edges = [(u, v) for u, v in subG.edges()]
 
-        # Set edge colors based on the weight
         edge_colors = ['black' if adjacency_matrix[u, v] == 1 else 'red' for u, v in edges]
         
-        #pos = nx.nx_agraph.graphviz_layout(subG, prog='circo')
-        #pos = nx.circular_layout(subG)
         node_order, min_cross = best_permutation(subG)
-        pos = circular_positions(node_order)
-        # Draw subgraph edges with the appropriate color
+        pos = circular_positions(node_order) #Circular layout with the optimal node ordering
         nx.draw_networkx_edges(subG, pos, ax=ax, edge_color=edge_colors, alpha=1, width=2)
-        
-        # Draw subgraph nodes (light blue fill, black outline)
         nx.draw_networkx_nodes(subG, pos, ax=ax, node_size=40, node_color='blue', edgecolors='black', linewidths=1)
         
-        ax.set_title(f"Graph {i+1}")
-        ax.axis("off")  # Hide axis
+        ax.set_title(f"No. {i+1}")
+        ax.axis("off")
         ax.set_aspect('equal')
-
-    # Hide any unused subplot axes
+    
+    legend_elements = [
+        mlines.Line2D([], [], color='black', lw=1.3, label='Edge Weight = 1'),
+        mlines.Line2D([], [], color='red', lw=1.3, label='Edge Weight = 2')
+    ]
+    fig.legend(handles=legend_elements, loc='lower right', fontsize=13, frameon=True,bbox_to_anchor=(0.98, 0.015))
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
@@ -171,7 +173,7 @@ def count_crossings(G, pos):
 
     for i in range(len(edges)):
         for j in range(i + 1, len(edges)):
-            if len(set(edges[i]) & set(edges[j])) == 0:  # disjoint edges only
+            if len(set(edges[i]) & set(edges[j])) == 0:
                 if intersect(edges[i], edges[j]):
                     crossings += 1
     return crossings
@@ -200,32 +202,35 @@ def draw_graph(encoded_graph, n, d):
         n (int): Number of vertices in the graph.
         d (int): Modulo value for weights (used for decoding).
     """
-    # Decode the graph to an adjacency matrix
     adjacency_matrix = bitpack_decode(encoded_graph, n, d)
-    
-    # Create a NetworkX graph
     G = nx.Graph()
-    
-    # Add nodes and edges to the graph
+
     for i in range(n):
         G.add_node(i, label=f'Node {i}')
         for j in range(i + 1, n):
             if adjacency_matrix[i, j] > 0:
                 G.add_edge(i, j, weight=adjacency_matrix[i, j])
     
-    # Draw the graph with labels
-    pos = nx.spring_layout(G)  # Use a spring layout for visualization
+    pos = nx.spring_layout(G)
     edge_labels = {(u, v): f"{d['weight']}" for u, v, d in G.edges(data=True)}
     nx.draw(G, pos, with_labels=True, node_color="lightblue", node_size=500, font_weight="bold")
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     
-    # Show the plot
-    plt.title("Graph Visualization")
+    plt.title("Graph")
     plt.show()
 
 
+def total_weight(graph):
+    """Calculate the total weight of a graph. Here only for d=3."""
+    bit_length=int(graph).bit_length()
+    pair_sum = []
+    for i in range(0, bit_length, 2):
+        pair = (graph >> i) & 0b11 
+        pair_sum.append(pair)  
+    return sum(pair_sum)
 
 def bitpack_encode(matrix, d):
+    "Create bitpacked encoding of the adjacency matrix."
     n = matrix.shape[0]
     bit_length = (d-1).bit_length()  # Number of bits per weight
     packed = 0
@@ -236,11 +241,11 @@ def bitpack_encode(matrix, d):
         for j in range(i + 1, n):
             weight = matrix[i, j]
             packed |= (weight << shift)  # Shift and add weight to packed
-            shift += bit_length  # Update shift for the next weight
-    
+            shift += bit_length
     return int(packed)
 
 def bitpack_decode(packed, n, d):
+    """Decode the bitpacked integer into an adjacency matrix."""
     bit_length = (d-1).bit_length()
     matrix = np.zeros((n, n), dtype=int)
     shift = 0
@@ -250,25 +255,41 @@ def bitpack_decode(packed, n, d):
         for j in range(i + 1, n):
             weight = (packed >> shift) & ((1 << bit_length) - 1)  # Extract bits
             matrix[i, j] = weight
-            matrix[j, i] = weight  # Reflect symmetry
-            shift += bit_length  # Move to the next weight
+            matrix[j, i] = weight
+            shift += bit_length
     
     return matrix
 
 
-# Local scaling
+def local_scaling(G, v, k, d):
+    """
+    Perform local scaling.
 
-def local_scaling(G, v: int, k: int, d: int):
+    Args:
+        G(np.array): Adjaceny matrix of the graph
+        v(int): Vertex for the scaling
+        k(int): Scaling factor
+        d(int): Local dimension
+    """
+
     n = G.shape[0]
     for u in range(n):
         if u != v:
             G[v, u] = (k * G[v, u]) % d
-            G[u, v] = G[v, u]  # Symmetric
-
-# Local complementation
+            G[u, v] = G[v, u]
 
 
-def local_complementation(G, v: int, k: int, d: int):
+def local_complementation(G, v, k, d):
+    """
+    Perform local complementation.
+
+    Args:
+        G(np.array): Adjaceny matrix of the graph
+        v(int): Vertex for the complementation
+        k(int): Scaling factor
+        d(int): Local dimension
+    """
+
     n = G.shape[0]
     for u in range(n):
         for w in range(n):
