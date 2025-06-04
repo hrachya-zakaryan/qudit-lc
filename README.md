@@ -1,10 +1,10 @@
 # qudit-lc
 
-A complete framework for calculating the Local Clifford (LC) entanglement classes for qutrit graph states up to 7 particles the necessary observables extraction and the corresponding data analysis.
+A complete framework for calculating the Local Clifford (LC) entanglement classes for qudit graph states, the necessary observables extraction, and the corresponding data analysis.
 
 ## Overview
 
-The goal of this work was the extraction of the entanglement classes using local complementation for systems with local dimension 3 (qutrits). In principle, there are 3 steps.
+The goal of this work was the extraction of the entanglement classes using local complementation. In principle, there are 3 steps.
 
 - **Orbit extraction:** For this step, we had to calculate the LC orbits and represent them as a graph called Orbit Graph (OG).
 - **Define Observables:** At this step, we defined a set of properties emerging from graph theory as well as from quantum theory. For example, the vertex number, the density of the graph, and the Schmidt Measure.
@@ -15,32 +15,35 @@ Scripts are provided for presenting our results with figures and tables for late
 
 ## Installation
 
-git clone https://github.com/hrachya-zakaryan/qudit-lc
+```git clone https://github.com/hrachya-zakaryan/qudit-lc```
 
 
-## Python Version and packages
-The user must ensure to use the following versions of the packages.
-Python                    3.12.6
-matplotlib                3.7.3
-networkx                  3.2.1
-numpy                     1.25.2
-pandas                    2.2.3
-scipy                     1.11.2
-sinter                    1.14.0
-sympy                     1.12
-wolframclient             1.4.0
+## Python Version and Packages
+The user must ensure to use the following versions of the packages.<br>
+Python                    3.11.5 <br>
+matplotlib                3.7.3 <br>
+networkx                  3.2.1 <br>
+numpy                     1.25.2 <br>
+pandas                    2.2.3 <br>
+scipy                     1.11.2 <br>
+sinter                    1.14.0 <br>
+sympy                     1.12 <br>
+wolframclient             1.4.0 <br>
 
-qudit-lc/
-│
-├── og_data/              <- Data produced for the statistical analysis in txt files.
-├── c/               <- File with code in C to speed up the code.
-├── orbitsd{d}_n{n}_separated/ <- These files include all orbits for d the local dimension and n the number of particles.  
-    ├── orbit_i <- The index i indicates the different orbtis.         
-├── aspl.ipynb <- Notebook for the extraction of the average shortest path and the heuristic method adopted.
-├── data_analysis_functions.py <- A module with every function required for the data extraction and analysis.
-├── main_data_notebook.ipynb <- The notebook with the statistical analysis after the data extraction.
-├── min_edge_color_states_wolfram_engine.py <- Module to compute the minimum edge chromatic number.
-├── mspl.ipynb <- Notebook for the extraction of the maximun shortest path and the heuristic method adopted.
-├── real_join_data.py <- Module for the extraction of the required datasets.
-└── sm_final_data.py <- Module for preprocessing the Schmidt Measure data before the data analysis.
+## File Hierarchy
+qudit-lc/ <br>
+&emsp;&emsp;│ <br>
+&emsp;&emsp;├── og_data_final/   <- Data produced for the statistical analysis in txt files. <br>
+&emsp;&emsp;├── c/               <- Folder with code in C for graph generation and complementation. <br>
+&emsp;&emsp;├── orbitsd{d}_n{n}_separated_sorted/ <- These folders include all orbits for d the local dimension and n the number of particles. <br>
+     &emsp;&emsp;&emsp;&emsp;├── orbit_i <- The index i indicates the different orbits.         
+&emsp;&emsp;├── aspl.ipynb <- Notebook for the extraction of the average shortest path and the heuristic method adopted. <br>
+&emsp;&emsp;├── auxilary_functions.py <- Helper functions for qudit_lc.py <br>
+&emsp;&emsp;├── data_analysis_functions.py <- A module with every function required for the data extraction and analysis. <br>
+&emsp;&emsp;├── main_data_notebook.ipynb <- The notebook with the statistical analysis after the data extraction. <br>
+&emsp;&emsp;├── min_edge_color_states_wolfram_engine.py <- Module to compute the minimum edge chromatic number. <br>
+&emsp;&emsp;├── mspl.ipynb <- Notebook for the extraction of the maximum shortest path and the heuristic method adopted. <br>
+&emsp;&emsp;├── qudit_lc.py <- Main functions for graph generation, orbit extraction, and Schmidt measure computation. <br>
+&emsp;&emsp;├── real_join_data.py <- Module for the extraction of the required datasets. <br>
+&emsp;&emsp;└── sm_final_data.py <- Module for preprocessing the Schmidt Measure data before the data analysis. <br>
 
