@@ -3,8 +3,6 @@ import itertools
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-from networkx.drawing.nx_agraph import graphviz_layout
-import pygraphviz as pgv
 import networkx as nx
 import matplotlib.pyplot as plt
 

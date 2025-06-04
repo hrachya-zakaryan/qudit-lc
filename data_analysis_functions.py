@@ -39,7 +39,7 @@ import networkx as nx
 import numpy as np
 from collections import deque, Counter
 import matplotlib.pyplot as plt
-from auxilary_unparallelized import local_complementation, local_scaling, bitpack_decode, bitpack_encode, draw_graph
+from auxilary_functions import local_complementation, local_scaling, bitpack_decode, bitpack_encode, draw_graph
 
 # Calculate the maximum degree in a graph
 def max_degree(g):
