@@ -87,7 +87,7 @@ void local_scaling(int n, int v, int k, int d, int *matrix) {
 
 void local_complementation(int n, int v, int k, int d, int *matrix) {
     for (int u = 0; u < n; u++) {
-        for (int w = 0; w < n; w++) {
+        for (int w = u; w < n; w++) {
             if (u != w && u != v && w != v && matrix[v * n + u] && matrix[v * n + w]) {
                 matrix[u * n + w] = matrix[w * n + u] = (matrix[u * n + w] + k * matrix[v * n + u] * matrix[v * n + w]) % d;
             }
