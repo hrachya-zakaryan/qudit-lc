@@ -99,7 +99,7 @@ void local_scaling( int n, int v, int k, int d,int matrix[n][n]) {
 // Apply local complementation to vertex v
 void local_complementation(int n, int v, int k, int d, int matrix[n][n]) {
     for (int u = 0; u < n; u++) {
-        for (int w = 0; w < n; w++) {
+        for (int w = u; w < n; w++) {
             if (u != w && u != v && w != v && matrix[v][u] && matrix[v][w]) {
                 matrix[u][w] = matrix[w][u] = (matrix[u][w] + k * matrix[v][u] * matrix[v][w]) % d;
             }
