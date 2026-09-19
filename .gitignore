@@ -1,0 +1,7 @@
+__pycache__/
+.venv/
+data/
+orbit_scan
+orbits_mt
+*.png
+*_stats_cache.csv
